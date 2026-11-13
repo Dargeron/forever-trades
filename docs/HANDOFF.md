@@ -408,7 +408,8 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   (~14,165g a day), so about two-thirds of Blackwater's gold volume looks like cross-character transfers.
 - **Dark theme is the default** (owner's request); parchment is one tap away and remembered.
 - **Chart search** (owner's request): a box above the chart keeps only items whose name contains the text
-  (e.g. "recipe") and labels them.
+  (e.g. "recipe") and labels them. The chart keeps its scale and dot sizes while filtering (computed from all
+  items), so matching dots stay exactly where they were and the rest simply disappear (owner's request).
 - **Fix: empty price columns in Busiest on Blackwater.** The owner saw blank Alliance/Horde columns. Cause:
   GitHub Pages lets browsers cache index.html/app.js/style.css for 10 minutes (and phones or in-app browsers
   can keep them longer), while latest.json is always fetched fresh; the previous script read `aLow`/`hLow`,

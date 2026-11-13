@@ -58,7 +58,8 @@ python3 -m http.server -d site 8000
   `hiddenItems`/`hiddenGold` count what was dropped.
 - Site sorting: every column heading with `data-sort` sorts its table (again flips; arrow + `aria-sort`); the
   drop-down mirrors the ranked table. The chart has its own name filter (`#chart-search`, labels every match up to
-  30). Dark theme is the default; parchment via the ☀ button (localStorage).
+  30); the owner wants the dots never to move, so axes and dot sizes always come from all items and the filter
+  only hides dots. Dark theme is the default; parchment via the ☀ button (localStorage).
 - **Versioned deploys**: GitHub Pages lets browsers cache the page/JS/CSS for 10 min while `latest.json` is always
   fetched fresh, so an old script once misread renamed fields (the Blackwater prices showed "–"). `update.yml` stamps
   `?v=<sha>` into index.html, `VERSION` into app.js, and the pipeline writes `siteVersion` (from GITHUB_SHA) into the

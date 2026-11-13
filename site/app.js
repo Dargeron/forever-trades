@@ -379,7 +379,8 @@
     const H = Math.round(narrow ? W * 1.05 : W * 0.56);
     const m = { l: narrow ? 42 : 54, r: 14, t: 14, b: 46 };
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    const xs = pts.map((o) => Math.log10(o.marketDay)), ys = pts.map((o) => Math.log10(o.mult));
+    // Scale and dot sizes always come from every item, so the search box only hides dots: nothing moves.
+    const xs = all.map((o) => Math.log10(o.marketDay)), ys = all.map((o) => Math.log10(o.mult));
     let x0 = Math.min.apply(null, xs) - 0.12, x1 = Math.max.apply(null, xs) + 0.12;
     if (x1 - x0 < 1.2) { const mid = (x0 + x1) / 2; x0 = mid - 0.6; x1 = mid + 0.6; }   // a few dots: keep a 10x-plus span of gold ticks
     const y0 = Math.log10(1.1), y1 = Math.max(Math.log10(3), Math.max.apply(null, ys) + 0.08);
@@ -417,7 +418,7 @@
     svg.append(grid, guides, axis, xtl, ytl);
 
     const inB = new Set(bask.lines.map((l) => l.o.id));
-    const maxP = Math.max.apply(null, pts.map((o) => o.profitDay || 0).concat([1]));
+    const maxP = Math.max.apply(null, all.map((o) => o.profitDay || 0).concat([1]));
     const R = (o) => 3.2 + (narrow ? 5.5 : 7.5) * Math.sqrt((o.profitDay || 0) / maxP);
     const dots = svgEl('g');
     pts.slice().sort((a, b) => R(a) - R(b)).forEach((o) => {
