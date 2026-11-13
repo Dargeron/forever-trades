@@ -54,7 +54,8 @@ python3 -m http.server -d site 8000
 - Sales estimates start after the first hourly diff (`EARLY_SALES_HOURS` = 1, flagged early on the site); below
   `MIN_SALES_HOURS` = 6 ("warming") every price gap is listed without a volume filter.
 - `neutralTop` (`busiest`): items selling 0.5+/day on Blackwater that resell at a profit in a faction house
-  (cautious price × 0.95 > average price paid there), by gold a day; `xA`/`xH`/`resellX` are those ratios.
+  (cautious price × 0.95 > Blackwater's cheapest listing NOW, or the average paid if none is listed; `basisNow`), by gold
+  a day; `xA`/`xH`/`resellX` are those ratios. (Using the average paid showed ×1.19 next to a dearer Blackwater price.)
   Owner's rule: drop anything dearer on Blackwater than both houses pay (cross-character transfers);
   `hiddenItems`/`hiddenGold` count what was dropped.
 - Site sorting: every column heading with `data-sort` sorts its table (again flips; arrow + `aria-sort`); the

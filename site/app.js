@@ -691,6 +691,14 @@
       .forEach(([fac, x]) => s.append(el('span', 'badge ' + fac, FAC[fac] + ' ' + mult(x))));
     return s;
   }
+  // A faction price for the Blackwater table: the cheapest listing now; if none is listed, the recent price
+  // the resell ratio used (median or what buyers paid), marked as such so the badge and the numbers agree.
+  function facNow(low, ref) {
+    if (low) return coins(low);
+    if (ref) { const s = el('span', 'muted'); s.append('none now · ', coins(ref), ' recent'); return s; }
+    return '–';
+  }
+
   function busyDetails(o) {
     const box = el('div', 'details'), dl = el('dl');
     const bestFac = (o.xA || 0) >= (o.xH || 0) ? 'alliance' : 'horde';
@@ -701,15 +709,17 @@
       ['Gold a day on Blackwater', coins(o.marketDay)],
       ['Cheapest on Blackwater now', o.low ? coins(o.low) : 'none listed'],
       ['Listed on Blackwater', num(o.qty, 0)],
-      ['Cheapest in the Alliance house now', coins(o.aLow)],
-      ['Cheapest in the Horde house now', coins(o.hLow)],
+      ['Cheapest in the Alliance house now', facNow(o.aLow, o.aRef)],
+      ['Cheapest in the Horde house now', facNow(o.hLow, o.hRef)],
       ['Resell in the Alliance house', o.xA ? join(mult(o.xA), ' at ', coins(o.aRef)) : '–'],
       ['Resell in the Horde house', o.xH ? join(mult(o.xH), ' at ', coins(o.hRef)) : '–'],
+      ['Ratios compared with', o.basisNow ? join('today’s cheapest Blackwater listing, ', coins(o.low)) : join('what buyers paid (nothing listed now), ', coins(o.avg))],
     ];
     rows.forEach(([k, val]) => { const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv); });
     box.append(dl);
     const how = el('p', 'how');
-    how.append('Bought here at about ', coins(o.avg), ', it resells in the ' + FAC[bestFac] + ' house at about ', coins(bestRef),
+    how.append(o.basisNow ? 'Bought here at today’s cheapest listing, ' : 'Nothing is listed here right now; bought at what buyers paid, ', coins(o.basisNow ? o.low : o.avg),
+      ', it resells in the ' + FAC[bestFac] + ' house at about ', coins(bestRef),
       ': ' + mult(bestX) + ' after that house’s 5% cut. Resell prices are the cautious ones: the cheapest listing, or the 3-day median or what buyers actually paid if lower.');
     box.append(how, historySection(o.id));
     return box;
@@ -721,9 +731,9 @@
     const sub = $('busy-sub'); sub.textContent = '';
     if (h < 1) sub.append('Items people buy on the neutral house that resell at a profit at home. Appears after the next hourly update.');
     else {
-      sub.append('Items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house (after its 5% cut), by gold changing hands a day (' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of data' + (h < 24 ? ', early estimates' : '') + '). ');
+      sub.append('Items people buy on the neutral house that you could buy there now and resell at a profit in the Alliance or Horde house (after its 5% cut), by gold changing hands a day (' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of data' + (h < 24 ? ', early estimates' : '') + '). The ×-ratios compare with today’s cheapest Blackwater listing, or with what buyers paid when none is listed. ');
       sub.append('The last three columns are the cheapest listing in each house right now. ');
-      if (t.hiddenItems) sub.append('Left out: ' + t.hiddenItems.toLocaleString('en') + ' items (', coins(t.hiddenGold), ' a day) that cost more here than either house pays, mostly players moving goods between their own characters.');
+      if (t.hiddenItems) sub.append('Left out: ' + t.hiddenItems.toLocaleString('en') + ' items (', coins(t.hiddenGold), ' a day) that cost more here right now than either house pays; many are players moving goods between their own characters.');
     }
     markHeaders($('busy-card'), S.busySort, S.busyDir);
     const tb = $('busy-body'); tb.textContent = '';
@@ -747,14 +757,14 @@
       const now = el('span', 'item-sub only-s');
       now.append('Now: ');
       if (o.low) now.append('Blackwater ', coins(o.low), ' · ');
-      now.append('Alliance ', coins(o.aLow), ' · Horde ', coins(o.hLow));
+      now.append('Alliance ', facNow(o.aLow, o.aRef), ' · Horde ', facNow(o.hLow, o.hRef));
       ti.append(sold, badgesS, now);
       const rs = el('td', 'hide-t'); rs.append(resellBadges(o));
       const best = (o.xA || 0) >= (o.xH || 0) ? 'a' : 'h';
       tr.append(ti, numTd(num(o.soldDay, 1), 'hide-l'), numTd(coins(o.avg), 'hide-l'), barCell({ marketDay: o.marketDay }, 'marketDay', max), rs,
         numTd(o.low ? coins(o.low) : '', 'hide-s'),
-        numTd(coins(o.aLow), 'hide-s' + (best === 'a' ? ' lo' : '')),
-        numTd(coins(o.hLow), 'hide-s' + (best === 'h' ? ' lo' : '')));
+        numTd(facNow(o.aLow, o.aRef), 'hide-s' + (best === 'a' ? ' lo' : '')),
+        numTd(facNow(o.hLow, o.hRef), 'hide-s' + (best === 'h' ? ' lo' : '')));
       tb.append(tr, expandable(tr, 9, () => busyDetails(o)));
     });
     const more = $('busy-more');

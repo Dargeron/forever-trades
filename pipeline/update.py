@@ -457,9 +457,11 @@ def finish(out, warming):
 def busiest(hist, house, data, now_dt, names_cache, series=None):
     """Items people buy on Blackwater (`house`) that can be resold at a profit in the Alliance
     or Horde house: estimated units sold a day and the copper they sold for, over up to 7 days.
-    An item stays only if a faction house's cautious price, after its cut, beats what buyers
-    paid on Blackwater. Items dearer here than both houses pay are left out: they are mostly
-    players moving goods between their own characters. Returns (items, hours, hidden)."""
+    The resell ratio compares a faction house's cautious price, after its cut, with what it costs
+    on Blackwater NOW: the cheapest listing, or what buyers paid if nothing is listed (the owner
+    saw x1.19 next to a Blackwater price dearer than the faction's, because the ratio used the
+    average paid). An item stays only if that ratio beats 1; the rest are left out (mostly
+    players moving goods between their own characters). Returns (items, hours, hidden)."""
     h = hist.get(house) or {}
     cutoff = day_of(now_dt - timedelta(days=WINDOW_DAYS))
     hours = sum(v for d, v in (h.get('hours') or {}).items() if d > cutoff)
@@ -481,22 +483,24 @@ def busiest(hist, house, data, now_dt, names_cache, series=None):
                          series_median(series or {}, 'alliance', i))
         h_ref = cautious(Hd.get(i), item_history(hist, 'horde', i, now_dt)[1], avg_paid(hist, 'horde', i, now_dt),
                          series_median(series or {}, 'horde', i))
-        xa = a_ref * keep / avg if a_ref else None
-        xh = h_ref * keep / avg if h_ref else None
+        s = S.get(i)
+        basis = s['low'] if s else avg      # buy price on Blackwater: cheapest listing now, else the average paid
+        xa = a_ref * keep / basis if a_ref else None
+        xh = h_ref * keep / basis if h_ref else None
         best = max([x for x in (xa, xh) if x is not None], default=None)
         if not best or best <= 1:
             hidden['items'] += 1
             hidden['gold'] += copper / hours * 24
             continue
         info = item_info(i, names_cache)
-        s, a, hh = S.get(i), A.get(i), Hd.get(i)
+        a, hh = A.get(i), Hd.get(i)
         out.append(dict(id=i, name=info[0], q=info[1], cls=info[2], soldDay=round(spd, 2),
                         avg=int(round(avg)), marketDay=int(round(copper / hours * 24)),
                         low=s['low'] if s else None, qty=s['qty'] if s else 0,
                         aLow=a['low'] if a else None, hLow=hh['low'] if hh else None,      # cheapest listing now
                         aRef=int(round(a_ref)) if a_ref else None, hRef=int(round(h_ref)) if h_ref else None,
                         xA=round(xa, 3) if xa else None, xH=round(xh, 3) if xh else None,
-                        resellX=round(best, 3)))
+                        resellX=round(best, 3), basisNow=bool(s)))
     out.sort(key=lambda o: -o['marketDay'])
     hidden['gold'] = int(round(hidden['gold']))
     return out, hours, hidden

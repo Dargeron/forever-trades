@@ -189,7 +189,8 @@ td.mkt { background: rgb(var(--mkt-rgb) / var(--a, 0)); }
 .c-bar { width: 24%; min-width: 108px; }
 .c-bar .val { display: block; font-weight: 700; font-size: 13px; white-space: nowrap; }
 .c-bar .per { font-weight: 500; color: var(--ink-3); }
-.c-bar .muted { color: var(--ink-3); font-weight: 500; }
+.c-bar .muted, .grid .muted, .details .muted { color: var(--ink-3); font-weight: 500; }
+.grid td .muted { white-space: normal; display: inline-block; max-width: 9em; line-height: 1.3; }   /* 'none now · 2g 1s recent' wraps */
 .track { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--bar-b), var(--bar-a)); box-shadow: 0 0 6px rgba(244, 199, 94, .25); }
 .empty { color: var(--ink-2); padding: 12px 4px; }

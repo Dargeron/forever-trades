@@ -135,9 +135,11 @@ def main():
         assert o['resellX'] > 1 and abs(o['resellX'] - max(x for x in (o['xA'], o['xH']) if x)) < 1e-6, o
         for ref, x in ((o['aRef'], o['xA']), (o['hRef'], o['xH'])):
             assert (ref is None) == (x is None), o
-            if x is not None:   # ref and avg are rounded to whole coppers; x was computed before rounding
-                lo = (ref - 0.5) * 0.95 / (o['avg'] + 0.5)
-                hi = (ref + 0.5) * 0.95 / max(0.01, o['avg'] - 0.5)
+            if x is not None:   # compared with the Blackwater price now (cheapest listing), else the average paid
+                basis = o['low'] if o['basisNow'] else o['avg']
+                assert o['basisNow'] == bool(o['low']), o
+                lo = (ref - 0.5) * 0.95 / (basis + 0.5)
+                hi = (ref + 0.5) * 0.95 / max(0.01, basis - 0.5)
                 assert lo - 1e-3 <= x <= hi + 1e-3, (o, lo, hi)
     for o in top:   # the site shows the cheapest listing now in each house; Alliance and Horde are always listed here
         assert o['aLow'] and o['hLow'] and ('low' in o), o

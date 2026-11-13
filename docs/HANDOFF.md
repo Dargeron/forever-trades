@@ -448,3 +448,7 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   sold a day. No history can be backfilled (Blizzard serves only the current snapshot; other sources'
   terms forbid storing their data), so the record starts on 13 Nov 2026.
 - CSS lesson: `tr.details-row td` also styled cells of tables nested inside the details; use `> td`.
+- **Busiest on Blackwater ratios use today's Blackwater price** (owner's report: ×1.19 shown although the
+  faction price was below the Blackwater price on screen). The ratio had compared with the average price
+  paid over past hours; it now compares with the cheapest Blackwater listing now (the average paid only
+  when nothing is listed), and items unprofitable at today's price drop out.
