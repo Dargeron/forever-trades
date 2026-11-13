@@ -150,6 +150,10 @@ def main():
     one = json.load(open(os.path.join(sdir, f'{next(iter(ids))}.json')))
     assert max(len(v) for v in one['h'].values()) == 9, {k: len(v) for k, v in one['h'].items()}
     assert any(s.get('med') for s in one['s'].values()) and out['trackingSince'] == '2026-11-13', one['s']
+    for n in list(files)[:200]:   # cheapest since tracking began is never dearer than the 7-day cheapest
+        f = json.load(open(os.path.join(sdir, f'{n}.json')))
+        for h, st in f['s'].items():
+            assert not (st['min7'] and st['minAll'] and st['minAll'][0] > st['min7']), (n, h, st)
     for fac in ('alliance', 'horde'):
         for o in out['factions'][fac]['buyHomeSellNeutral']['items']:
             assert o['refMed'] is None or o['ref'] <= o['refMed'] + 1, o

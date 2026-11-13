@@ -338,6 +338,18 @@ def update_alltime(alltime, house, stats, snap_dt):
             a[str(item)] = [st['low'], day]
 
 
+def seed_alltime(alltime, hist):
+    """The daily history holds each day's cheapest listing and can go back further than the
+    cheapest-ever record (which began on the evening of 13 Nov): never let 'cheapest since
+    tracking began' be dearer than a day's minimum."""
+    for house, h in hist.items():
+        a = alltime.setdefault(house, {})
+        for item, days in (h.get('items') or {}).items():
+            for d, v in days.items():
+                if v[4] and (item not in a or v[4] < a[item][0]):
+                    a[item] = [v[4], d]
+
+
 def min_low_days(hist, house, item, now_dt, days=WINDOW_DAYS):
     recs = ((hist.get(house) or {}).get('items') or {}).get(str(item)) or {}
     cutoff = day_of(now_dt - timedelta(days=days))
@@ -797,6 +809,7 @@ def cmd_run(api, args):
                             'hiddenItems': hidden['items'], 'hiddenGold': hidden['gold']}
     os.makedirs(args.out, exist_ok=True)
     jsave(os.path.join(args.out, 'latest.json'), result)
+    seed_alltime(alltime, hist)
     # one small price-history file per listed item, loaded by the site when the item is opened
     ids = {o['id'] for f in result['factions'].values() for v in f.values() for o in v['items']} | {o['id'] for o in top}
     sdir = os.path.join(args.out, 'series')
