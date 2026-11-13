@@ -436,3 +436,15 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   within ~20 minutes of each new snapshot.
 - **Sold a day / Market a day name their house** in the headings, drop-down, tooltip and top-ten tables,
   e.g. "Sold a day (Horde AH)": always the faction house where the buyers are, never Blackwater.
+- **Billy Club ×488 and spike protection** (owner's report). At 18:25 the only Billy Clubs left in the
+  Horde house were three at 20g (the 4–5s ones had sold), so half the "Horde price" was 10g against 1s74c
+  in Alliance. Two 20g listings were also cancelled and reposted at 20g and counted as sales (48 a day,
+  959g a day). Fixes: a same-or-lower-price repost is a cancel; the planning price is capped by what buyers
+  actually paid and by a 3-day hourly median market price, kept in a new hourly price-history store.
+- **Price history and details everywhere.** Each listed item gets a small history file (hourly cheapest
+  and market price per house for 72 h, daily summary for 14 days, cheapest ever). Every item opens its
+  details anywhere on the site (rows expand; chart dots and tile names open a card), with a price graph
+  and a 3-day median / 7-day cheapest / cheapest since 13 Nov / paid table. Ten biggest markets also show
+  sold a day. No history can be backfilled (Blizzard serves only the current snapshot; other sources'
+  terms forbid storing their data), so the record starts on 13 Nov 2026.
+- CSS lesson: `tr.details-row td` also styled cells of tables nested inside the details; use `> td`.

@@ -182,8 +182,8 @@ th.c-rank { text-align: right; }
 .flag.up::before { content: "▲ "; color: var(--good); }
 .only-s, .only-m, .only-t, .only-l { display: none; }
 .grid th, .grid th.num { white-space: normal; }   /* headings wrap; e.g. 'Market a day (Alliance AH)' */
-.rank tr.row { cursor: pointer; }
-.rank tr.row:hover td, .rank tr.row[aria-expanded="true"] td { background-color: var(--hover); }
+.grid tr.row { cursor: pointer; }
+.grid tr.row:hover td, .grid tr.row[aria-expanded="true"] td { background-color: var(--hover); }
 td.ret { font-weight: 750; background: rgb(var(--ret-rgb) / var(--a, 0)); }
 td.mkt { background: rgb(var(--mkt-rgb) / var(--a, 0)); }
 .c-bar { width: 24%; min-width: 108px; }
@@ -193,7 +193,7 @@ td.mkt { background: rgb(var(--mkt-rgb) / var(--a, 0)); }
 .track { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--bar-b), var(--bar-a)); box-shadow: 0 0 6px rgba(244, 199, 94, .25); }
 .empty { color: var(--ink-2); padding: 12px 4px; }
-tr.details-row td { background: var(--panel-3); padding: 10px 12px 12px; }
+tr.details-row > td { background: var(--panel-3); padding: 10px 12px 12px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 750; letter-spacing: .02em; color: #fff; border-radius: 6px; padding: 1px 7px; white-space: nowrap; vertical-align: 1px; }
 .badge.alliance { background: linear-gradient(180deg, var(--ally), var(--ally-2)); }
 .badge.horde { background: linear-gradient(180deg, var(--horde), var(--horde-2)); }
@@ -217,7 +217,7 @@ tr.details-row td { background: var(--panel-3); padding: 10px 12px 12px; }
 .more { appearance: none; width: 100%; margin-top: 10px; background: linear-gradient(180deg, var(--panel-2), var(--panel-3)); color: var(--head); border: 1px solid var(--edge); border-radius: 10px; padding: 10px; font: inherit; font-weight: 700; cursor: pointer; }
 .more:hover { box-shadow: inset 0 0 0 1px var(--trim); }
 
-.details { font-size: 13px; color: var(--ink-2); }
+.details { font-size: 13px; color: var(--ink-2); contain: inline-size; }   /* an open panel never widens its table */
 .details dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; margin: 0; }
 .details .kv { min-width: 0; }
 .details dt { font-size: 12px; color: var(--ink-3); }
@@ -279,6 +279,7 @@ footer { font-size: 12.5px; color: var(--ink-3); margin-top: 24px; text-align: c
 .tooltip .tsub { color: #ffd100; margin-bottom: 4px; }
 .tooltip .tr { display: flex; justify-content: space-between; gap: 16px; font-variant-numeric: tabular-nums; }
 .tooltip .tr > span:first-child { color: #c8c8c8; }
+.tooltip .tfoot { margin-top: 5px; color: #9aa0b4; font-size: 11.5px; }
 .tooltip .tq0 { color: #9d9d9d; } .tooltip .tq1 { color: #ffffff; } .tooltip .tq2 { color: #1eff00; } .tooltip .tq3 { color: #3d9bff; } .tooltip .tq4 { color: #b866ff; } .tooltip .tq5 { color: #ff8000; }
 .tooltip .ug { color: #ffd24d; } .tooltip .us { color: #d4d8de; } .tooltip .uc { color: #e39258; }
 
@@ -287,6 +288,49 @@ footer { font-size: 12.5px; color: var(--ink-3); margin-top: 24px; text-align: c
   .hide-l { display: none; }
   .item-sub.only-l { display: block; }
 }
+
+/* price history inside an item's details */
+.history { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--edge-soft); }
+.history-title { margin: 0 0 6px; font-family: "Cinzel", Georgia, serif; font-size: 14px; color: var(--head); }
+.history-body { color: var(--ink-2); overflow-x: auto; }
+.hchart { display: block; width: 100%; height: auto; max-width: 760px; }
+.hchart .hgrid line { stroke: var(--edge-soft); }
+.hchart .haxis text { fill: var(--ink-3); font-size: 11px; }
+.hchart .hline { fill: none; stroke-width: 2; }
+.hchart .hmed { stroke-width: 1.5; stroke-dasharray: 6 5; opacity: .9; }
+.hchart .alliance { stroke: var(--ally); } .hchart .hdot.alliance { fill: var(--ally); }
+.hchart .horde { stroke: var(--horde); } .hchart .hdot.horde { fill: var(--horde); }
+.hchart .neutral { stroke: var(--gold); } .hchart .hdot.neutral { fill: var(--gold); }
+.hchart .hdot { stroke: var(--panel); stroke-width: 1; }
+.hlegend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2); margin: 4px 0 8px; }
+.hlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw.alliance { background: var(--ally); } .sw.horde { background: var(--horde); } .sw.neutral { background: var(--gold); }
+.sw.dash { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--ink-2); background: none; }
+.history-table { margin-top: 4px; font-size: 13px; }
+.history-table .hlabel { color: var(--ink-3); }
+.history-table th .sw { vertical-align: -1px; }
+.hn-short { display: none; }
+@media (max-width: 480px) { .hn-full { display: none; } .hn-short { display: inline; } }
+@media (max-width: 400px) {
+  .history-table { font-size: 12px; } .history-table td, .history-table th { padding: 6px 3px; }
+  .history-table .money { white-space: normal; }
+}
+/* top-ten cards are narrow: same short headings there */
+@media (min-width: 641px) and (max-width: 1100px) { .pair .hn-full { display: none; } .pair .hn-short { display: inline; } }
+
+/* item details card (chart dots, summary tiles) */
+.modal { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, .62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-card {
+  width: min(680px, 100%); max-height: 86vh; overflow: auto; padding: 18px 18px 16px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--trim); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+}
+.modal-head { position: sticky; top: -18px; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  margin: -18px -18px 12px; padding: 14px 12px 10px 18px; background: var(--panel-2); border-bottom: 1px solid var(--edge-soft); }
+.modal-title { margin: 4px 0 0; font-size: 18px; min-width: 0; overflow-wrap: anywhere; }
+.modal-close { flex: none; appearance: none; border: 0; background: none; color: var(--head); font-size: 26px; line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 8px; }
+.modal-close:hover { background: var(--hover); }
+.linkish { appearance: none; border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 
 /* narrower screens */
 @media (max-width: 900px) {

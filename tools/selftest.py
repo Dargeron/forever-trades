@@ -34,7 +34,22 @@ def market():
     return m, set(gear)
 
 
+def check_diff_sales():
+    """Cancel-and-repost at the same price is not a sale; a plain disappearance is."""
+    sys.path.insert(0, os.path.join(ROOT, 'pipeline'))
+    import update
+    prev = {'1': [4563, 1, 200000, 'LONG'], '2': [4563, 1, 200000, 'VERY_LONG'], '3': [2589, 20, 25, 'LONG']}
+    cur = [dict(id=11, item=4563, qty=1, unit=200000, tl='VERY_LONG', var=''),      # reposted at the same 20g
+           dict(id=12, item=4563, qty=1, unit=199999, tl='VERY_LONG', var='')]      # reposted a copper cheaper
+    sold = update.diff_sales(prev, cur, 1.0)
+    assert 4563 not in sold, sold                      # both 20g listings were cancels, not sales
+    assert sold.get(2589) == [20, 500], sold           # the vanished Linen Cloth stack was bought
+    assert update.cautious({'low': 200000}, None, 498) == 498 and update.cautious(None, None, None) is None
+    print('diff_sales and cautious checks OK')
+
+
 def main():
+    check_diff_sales()
     shutil.rmtree(TMP, ignore_errors=True)
     os.makedirs(TMP)
     m, gear = market()
@@ -106,6 +121,7 @@ def main():
         v = out['factions'][fac]['buyHomeSellNeutral']
         assert v['refFaction'] == ('horde' if fac == 'alliance' else 'alliance') and v['share'] == 0.5, v.keys()
         for o in v['items']:
+            assert o['refPaid'] is None or o['ref'] <= o['refPaid'] + 1, o   # never above what buyers paid
             assert abs(o['half'] - o['ref'] * 0.5) <= 1, o
             assert o['sell'] <= o['half'] + 1 and (o['dstLow'] is None or o['sell'] <= o['dstLow']), o
             assert (o['sell'] == o['dstLow']) if o['undercut'] else abs(o['sell'] - o['half']) <= 1, o
@@ -126,6 +142,20 @@ def main():
     for o in top:   # the site shows the cheapest listing now in each house; Alliance and Horde are always listed here
         assert o['aLow'] and o['hLow'] and ('low' in o), o
     assert out.get('siteVersion') == 'dev', out.get('siteVersion')   # stamped with the commit by update.yml
+    # price history: one file per listed item, 9 hourly points, medians in use, never planned above the median
+    sdir = os.path.join(TMP, 'out', 'series')
+    ids = {o['id'] for f in out['factions'].values() for v in f.values() for o in v['items']} | {o['id'] for o in top}
+    files = set(int(n[:-5]) for n in os.listdir(sdir))
+    assert ids <= files, ('missing history files', len(ids - files))
+    one = json.load(open(os.path.join(sdir, f'{next(iter(ids))}.json')))
+    assert max(len(v) for v in one['h'].values()) == 9, {k: len(v) for k, v in one['h'].items()}
+    assert any(s.get('med') for s in one['s'].values()) and out['trackingSince'] == '2026-11-13', one['s']
+    for fac in ('alliance', 'horde'):
+        for o in out['factions'][fac]['buyHomeSellNeutral']['items']:
+            assert o['refMed'] is None or o['ref'] <= o['refMed'] + 1, o
+        for o in out['factions'][fac]['buyNeutralSellHome']['items']:
+            assert o['dstMed'] is None or o['sell'] <= o['dstMed'] + 1, o
+    print('price history:', len(files), 'item files, sample', one['id'], {k: len(v) for k, v in one['h'].items()}, 'medians', {k: v.get('med') for k, v in one['s'].items()})
     print('busiest: left out', out['neutralTop']['hiddenItems'], 'items dearer on Blackwater than either house pays')
     print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')
     print('selftest OK ->', os.path.join(TMP, 'out', 'latest.json'))

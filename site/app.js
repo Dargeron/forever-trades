@@ -152,7 +152,12 @@
     const t = el('div', 'tile');
     t.append(el('div', 'label', label));
     const val = el('div', 'value'); val.append(value); t.append(val);
-    if (note && typeof note === 'object') { const n = el('div', 'note'); n.append(itemName(note)); t.append(n); } else if (note) t.append(el('div', 'note', note));
+    if (note && typeof note === 'object') {
+      const n = el('div', 'note'), b = el('button', 'linkish');
+      b.type = 'button'; b.append(itemName(note));
+      b.addEventListener('click', (e) => { e.stopPropagation(); openModal(note, details(note)); });
+      n.append(b); t.append(n);
+    } else if (note) t.append(el('div', 'note', note));
     return t;
   }
 
@@ -276,8 +281,10 @@
       tr.append(numTd(soldTxt(o), 'hide-m'), barCell(o, barKey, max));
       const dr = el('tr', 'details-row');
       dr.hidden = !S.open.has(o.id);
-      const dtd = el('td'); dtd.colSpan = 8; dtd.append(details(o)); dr.append(dtd);
+      const dtd = el('td'); dtd.colSpan = 8; dr.append(dtd);
+      if (S.open.has(o.id)) dtd.append(details(o));
       const toggle = () => {
+        if (!dtd.firstChild) dtd.append(details(o));
         if (S.open.has(o.id)) S.open.delete(o.id); else S.open.add(o.id);
         const on = S.open.has(o.id);
         tr.setAttribute('aria-expanded', String(on)); dr.hidden = !on;
@@ -293,6 +300,41 @@
     } else more.hidden = true;
   }
 
+  // Why a planning price is below the cheapest listing: the 7-day typical price or what buyers actually paid.
+  function priceNote(p, low, paid, med) {
+    if (low === null || low === undefined || !(p < low)) return '';
+    const why = med && Math.abs(p - med) <= 1 ? '3-day median' : (paid && Math.abs(p - paid) <= 1 ? 'what buyers paid' : '7-day typical');
+    return ' (' + why + '; cheapest now ' + money(low) + (low > 1.25 * p ? ': protected from a price spike' : '') + ')';
+  }
+
+  // A table row that opens a details row under it, like the main table.
+  function expandable(tr, colSpan, build) {
+    tr.classList.add('row');
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', 'false');
+    const dr = el('tr', 'details-row'), td = el('td');
+    dr.hidden = true; td.colSpan = colSpan; dr.append(td);
+    const toggle = () => {
+      if (!td.firstChild) td.append(build());
+      dr.hidden = !dr.hidden;
+      tr.setAttribute('aria-expanded', String(!dr.hidden));
+    };
+    tr.addEventListener('click', toggle);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    return dr;
+  }
+
+  // The same details in a card over the page, for the chart and the summary tiles.
+  function openModal(o, body) {
+    const t = $('modal-title'), b = $('modal-body');
+    t.textContent = ''; t.append(itemName(o));
+    b.textContent = ''; b.append(body);
+    $('tooltip').hidden = true;
+    $('modal').hidden = false;
+    $('modal-close').focus();
+  }
+  function closeModal() { $('modal').hidden = true; }
+
   function details(o) {
     const home = FAC[S.faction], other = OTHER[S.faction];
     const box = el('div', 'details');
@@ -303,7 +345,8 @@
     const rows = toBW() ? [
       ['Buy at (' + home + ')', buyNode],
       ['Listed in ' + home, num(o.srcQty, 0)],
-      [other + ' price', join(coins(o.ref), o.refLow !== null && o.ref < o.refLow ? ' (7-day typical; cheapest now ' + money(o.refLow) + ')' : '')],
+      [other + ' price', join(coins(o.ref), priceNote(o.ref, o.refLow, o.refPaid, o.refMed))],
+      ['Paid on average in the ' + other + ' house', o.refPaid ? coins(o.refPaid) : 'no sales seen yet'],
       [(sh === 50 ? 'Half' : sh + '%') + ' of that', coins(o.half)],
       ['Cheapest on Blackwater', o.dstLow === null ? 'none listed' : join(coins(o.dstLow), o.undercut ? ' (competition: matched)' : ' (ignored: too high)')],
       ['Sell at (Blackwater)', join(coins(o.sell), o.undercut ? ', matching Blackwater' : ', ' + (sh === 50 ? 'half' : sh + '% of') + ' the ' + other + ' price')],
@@ -319,7 +362,8 @@
     ] : [
       ['Buy at (Blackwater)', buyNode],
       ['Listed on Blackwater', num(o.srcQty, 0)],
-      ['Sell at (' + home + ')', coins(o.sell)],
+      ['Sell at (' + home + ')', join(coins(o.sell), priceNote(o.sell, o.dstLow, o.dstPaid, o.dstMed))],
+      ['Paid on average in the ' + home + ' house', o.dstPaid ? coins(o.dstPaid) : 'no sales seen yet'],
       ['You get back (after 5% cut)', coins(o.back)],
       ['Profit per item', coins(o.profitEach, true)],
       ['Return', mult(o.mult) + ' · ' + o.tag],
@@ -337,8 +381,100 @@
     const how = el('p', 'how');
     how.append('Today: buy up to ' + n + (toBW() ? ' in the ' + home + ' house' : ' on Blackwater') + ' at ', coins(o.buy),
       ' or less, and list ' + (toBW() ? 'on Blackwater' : 'in the ' + home + ' house') + ' at about ', coins(o.sell), '.');
-    box.append(how);
+    box.append(how, historySection(o.id));
     return box;
+  }
+
+  // ---------- price history of one item: graph and summary, loaded when the item is opened
+  const HOUSES = ['alliance', 'horde', 'neutral'];
+  const HOUSE_NAME = { alliance: 'Alliance', horde: 'Horde', neutral: 'Blackwater' };
+  const HOUSE_SHORT = { alliance: 'Alli.', horde: 'Horde', neutral: 'BW' };
+  function historySection(id) {
+    const box = el('div', 'history');
+    box.append(el('h4', 'history-title', 'Price history'));
+    const body = el('div', 'history-body', 'Loading the price history…');
+    box.append(body);
+    fetch('data/series/' + id + '.json?g=' + encodeURIComponent(S.data.generated), { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((f) => { body.textContent = ''; body.append(historyChart(f), historyLegend(f), historyTable(f)); })
+      .catch(() => { body.textContent = 'No price history for this item yet.'; });
+    return box;
+  }
+  function timeLabel(tmin, withDay) {
+    const d = new Date(tmin * 60000);
+    const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return withDay ? d.toLocaleDateString([], { weekday: 'short' }) + ' ' + hm : hm;
+  }
+  function historyChart(f) {
+    const lines = HOUSES.map((h) => ({ h, pts: ((f.h || {})[h] || []).filter((p) => p[1] > 0) })).filter((l) => l.pts.length);
+    const n = lines.reduce((a, l) => a + l.pts.length, 0);
+    if (n < 2) return el('p', 'empty', 'The graph builds up with every hourly snapshot from Blizzard; check back in a few hours.');
+    const W = 640, H = 210, m = { l: 58, r: 12, t: 10, b: 26 };
+    const ts = [].concat.apply([], lines.map((l) => l.pts.map((p) => p[0])));
+    let t0 = Math.min.apply(null, ts), t1 = Math.max.apply(null, ts);
+    if (t1 - t0 < 120) { t0 -= 60; t1 += 60; }
+    const meds = lines.map((l) => ((f.s || {})[l.h] || {}).med).filter((x) => x > 0);
+    const vs = [].concat.apply([], lines.map((l) => l.pts.map((p) => p[1]))).concat(meds).map((x) => Math.log10(x));
+    let v0 = Math.min.apply(null, vs), v1 = Math.max.apply(null, vs);
+    if (v1 - v0 < 0.4) { const mid = (v0 + v1) / 2; v0 = mid - 0.2; v1 = mid + 0.2; }
+    const pad = (v1 - v0) * 0.06; v0 -= pad; v1 += pad;
+    const X = (t) => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+    const Y = (c) => H - m.b - (Math.log10(c) - v0) / (v1 - v0) * (H - m.t - m.b);
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Cheapest price over time in each house' }, 'hchart');
+    const grid = svgEl('g', {}, 'hgrid'), axis = svgEl('g', {}, 'haxis');
+    let ticks = [];
+    for (let e = Math.floor(v0); e <= Math.ceil(v1); e++) [1, 2, 5].forEach((k) => { const c = k * Math.pow(10, e), lv = Math.log10(c); if (lv >= v0 && lv <= v1) ticks.push(c); });
+    if (ticks.length > 6) ticks = ticks.filter((c) => String(c)[0] === '1');
+    ticks.forEach((c) => {
+      grid.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: Y(c), y2: Y(c) }));
+      const tx = svgEl('text', { x: m.l - 6, y: Y(c) + 4, 'text-anchor': 'end' }); tx.textContent = money(c); axis.append(tx);
+    });
+    const span = t1 - t0, withDay = span > 20 * 60;
+    for (let k = 0; k <= 4; k++) {
+      const t = t0 + span * k / 4;
+      const tx = svgEl('text', { x: X(t), y: H - 8, 'text-anchor': k === 0 ? 'start' : (k === 4 ? 'end' : 'middle') }); tx.textContent = timeLabel(t, withDay); axis.append(tx);
+    }
+    svg.append(grid, axis);
+    lines.forEach((l) => {
+      const med = ((f.s || {})[l.h] || {}).med;
+      if (med > 0) svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: Y(med), y2: Y(med) }, 'hmed ' + l.h));
+      if (l.pts.length > 1) svg.append(svgEl('polyline', { points: l.pts.map((p) => X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join(' ') }, 'hline ' + l.h));
+      l.pts.forEach((p) => {
+        const c = svgEl('circle', { cx: X(p[0]), cy: Y(p[1]), r: 3 }, 'hdot ' + l.h);
+        const tt = svgEl('title'); tt.textContent = HOUSE_NAME[l.h] + ', ' + timeLabel(p[0], true) + ': cheapest ' + money(p[1]) + ', market ' + money(p[2]);
+        c.append(tt); svg.append(c);
+      });
+    });
+    return svg;
+  }
+  function historyLegend(f) {
+    const p = el('p', 'hlegend');
+    HOUSES.forEach((h) => { if (((f.h || {})[h] || []).length) { const s = el('span'); s.append(el('i', 'sw ' + h), HOUSE_NAME[h] + ': cheapest listing'); p.append(s); } });
+    const s = el('span'); s.append(el('i', 'sw dash'), 'Dashed: 3-day median'); p.append(s);
+    return p;
+  }
+  function historyTable(f) {
+    // One row per measure, one column per house: four narrow columns fit even a small phone.
+    const since = S.data.trackingSince ? new Date(S.data.trackingSince + 'T12:00:00Z').toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'start';
+    const st = (h) => (f.s || {})[h] || {};
+    const hs = HOUSES.filter((h) => { const s = st(h); return s.now || s.med || s.min7 || s.minAll || s.paid; });
+    const t = el('table', 'grid mini history-table');
+    const hr = el('tr'); hr.append(el('th', null, ''));
+    hs.forEach((h) => { const th = el('th', 'num'); th.title = HOUSE_NAME[h]; th.append(el('i', 'sw ' + h), ' ', el('span', 'hn-full', HOUSE_NAME[h]), el('span', 'hn-short', HOUSE_SHORT[h])); hr.append(th); });
+    const thead = el('thead'); thead.append(hr); t.append(thead);
+    const tb = el('tbody');
+    [['Cheapest now', (s) => (s.now ? coins(s.now) : 'none')],
+     ['Median, 3 days', (s) => (s.med ? coins(s.med) : 'building')],
+     ['Cheapest, 7 days', (s) => (s.min7 ? coins(s.min7) : '–')],
+     ['Cheapest since ' + since, (s) => (s.minAll ? coins(s.minAll[0]) : '–')],
+     ['Paid on average', (s) => (s.paid ? coins(s.paid) : '–')],
+     ['Listed now', (s) => num(s.qty || 0, 0)]].forEach(([label, f2]) => {
+      const tr = el('tr'); tr.append(el('td', 'hlabel', label));
+      hs.forEach((h) => tr.append(numTd(f2(st(h)))));
+      tb.append(tr);
+    });
+    t.append(tb);
+    return t;
   }
 
   // ---------- chart: return against market size (log-log), every item with sales
@@ -357,6 +493,7 @@
     if (toBW()) rows.push([other + ' price', coins(o.ref)]);
     rows.push(['Sell', coins(o.sell)], ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'], ['Sold a day (' + buyersAH() + ')', soldTxt(o)], ['Market a day (' + buyersAH() + ')', coins(o.marketDay)]);
     rows.forEach(([a, b]) => { const r = el('div', 'tr'), vb = el('span'); vb.append(b); r.append(el('span', null, a), vb); tip.append(r); });
+    tip.append(el('div', 'tfoot', 'Click the dot for all the details'));
     tip.hidden = false;
     const bb = anchor.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
     let lx = bb.left + bb.width / 2 + 14, ly = bb.top - th - 8;
@@ -436,7 +573,8 @@
       const hide = () => { dot.classList.remove('on'); $('tooltip').hidden = true; };
       hit.addEventListener('pointerenter', show); hit.addEventListener('pointerleave', hide);
       hit.addEventListener('focus', show); hit.addEventListener('blur', hide);
-      hit.addEventListener('click', (e) => { e.stopPropagation(); show(); });
+      hit.addEventListener('click', (e) => { e.stopPropagation(); hide(); openModal(o, details(o)); });
+      hit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(o, details(o)); } });
       dots.append(hit, dot);
     });
     svg.append(dots);
@@ -474,14 +612,14 @@
       ti.append(el('span', 'mini-rank', (i + 1) + '. '), itemName(o));
       tr.append(ti);
       cols.slice(1).forEach(([, cls, f]) => { const td = el('td', cls); td.append(f(o)); tr.append(td); });
-      tb.append(tr);
+      tb.append(tr, expandable(tr, cols.length, () => details(o)));
     });
     t.append(tb);
   }
   function renderTop10(v) {
     const msg = (v.salesHours || 0) < 1 ? 'Needs sales data: after the next hourly update.' : 'Nothing qualifies yet.';
     miniTable('top-markets', v.items.filter((o) => o.mult >= 2 && o.marketDay > 0).sort((a, b) => b.marketDay - a.marketDay).slice(0, 10),
-      [['Item', 'c-item'], ['Market a day (' + buyersAH() + ')', 'num', (o) => coins(o.marketDay)], ['Back per 1g', 'num', (o) => mult(o.mult)]], msg);
+      [['Item', 'c-item'], ['Market a day (' + buyersAH() + ')', 'num', (o) => coins(o.marketDay)], ['Sold a day (' + buyersAH() + ')', 'num', (o) => num(o.soldDay, 1)], ['Back per 1g', 'num', (o) => mult(o.mult)]], msg);
     miniTable('top-returns', v.items.filter((o) => o.soldDay >= 4).sort((a, b) => b.mult - a.mult).slice(0, 10),
       [['Item', 'c-item'], ['Back per 1g', 'num', (o) => mult(o.mult)], ['Sold a day (' + buyersAH() + ')', 'num', (o) => num(o.soldDay, 1)]], msg);
   }
@@ -533,7 +671,7 @@
       const tr = el('tr'), ti = el('td', 'c-item');
       ti.append(itemName(l.o));
       tr.append(ti, numTd(String(l.units)), numTd(coins(l.maxP), 'hide-s'), numTd(coins(l.cost)), numTd(coins(l.o.sell), 'hide-s'), numTd(coins(l.back - l.cost, true)));
-      tb.append(tr);
+      tb.append(tr, expandable(tr, 6, () => details(l.o)));
     });
     t.append(tb); box.append(t);
     const btn = el('button', 'copy', 'Copy the list');
@@ -553,6 +691,30 @@
       .forEach(([fac, x]) => s.append(el('span', 'badge ' + fac, FAC[fac] + ' ' + mult(x))));
     return s;
   }
+  function busyDetails(o) {
+    const box = el('div', 'details'), dl = el('dl');
+    const bestFac = (o.xA || 0) >= (o.xH || 0) ? 'alliance' : 'horde';
+    const bestX = bestFac === 'alliance' ? o.xA : o.xH, bestRef = bestFac === 'alliance' ? o.aRef : o.hRef;
+    const rows = [
+      ['Sold a day on Blackwater', num(o.soldDay, 1)],
+      ['Average price paid on Blackwater', coins(o.avg)],
+      ['Gold a day on Blackwater', coins(o.marketDay)],
+      ['Cheapest on Blackwater now', o.low ? coins(o.low) : 'none listed'],
+      ['Listed on Blackwater', num(o.qty, 0)],
+      ['Cheapest in the Alliance house now', coins(o.aLow)],
+      ['Cheapest in the Horde house now', coins(o.hLow)],
+      ['Resell in the Alliance house', o.xA ? join(mult(o.xA), ' at ', coins(o.aRef)) : '–'],
+      ['Resell in the Horde house', o.xH ? join(mult(o.xH), ' at ', coins(o.hRef)) : '–'],
+    ];
+    rows.forEach(([k, val]) => { const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv); });
+    box.append(dl);
+    const how = el('p', 'how');
+    how.append('Bought here at about ', coins(o.avg), ', it resells in the ' + FAC[bestFac] + ' house at about ', coins(bestRef),
+      ': ' + mult(bestX) + ' after that house’s 5% cut. Resell prices are the cautious ones: the cheapest listing, or the 3-day median or what buyers actually paid if lower.');
+    box.append(how, historySection(o.id));
+    return box;
+  }
+
   function renderBusy() {
     const t = S.data.neutralTop || { items: [], salesHours: 0 };
     const h = t.salesHours || 0;
@@ -593,7 +755,7 @@
         numTd(o.low ? coins(o.low) : '', 'hide-s'),
         numTd(coins(o.aLow), 'hide-s' + (best === 'a' ? ' lo' : '')),
         numTd(coins(o.hLow), 'hide-s' + (best === 'h' ? ' lo' : '')));
-      tb.append(tr);
+      tb.append(tr, expandable(tr, 9, () => busyDetails(o)));
     });
     const more = $('busy-more');
     if (!S.busyQuery && list.length > BUSY_PAGE) {
@@ -642,6 +804,9 @@
   $('busy-search').addEventListener('input', (e) => { S.busyQuery = e.target.value.trim(); renderBusy(); });
   $('chart-search').addEventListener('input', (e) => { S.chartQuery = e.target.value.trim(); $('tooltip').hidden = true; renderScatter(view(), basket(view(), S.budget)); });
   document.addEventListener('click', () => { $('tooltip').hidden = true; });
+  $('modal-close').addEventListener('click', closeModal);
+  $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
   window.addEventListener('scroll', () => { $('tooltip').hidden = true; }, { passive: true });
   let rt;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.data) renderScatter(view(), basket(view(), S.budget)); }, 150); });

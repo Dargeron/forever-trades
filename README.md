@@ -70,6 +70,14 @@ Only the Python standard library is used.
   `pipeline/config.json`), so their traders can still resell at a profit; or the cheapest Blackwater
   listing if that is lower (competition). Blackwater's own asking prices are otherwise ignored: they are
   often stale and far too high.
+- **Spike protection**: every planning price is the lowest of the cheapest listing now, the item's
+  3-day median market price (hourly, from `state/series.json.gz`, once 3 points exist), its 7-day
+  typical price and the average price buyers actually paid. A few silly listings left after the
+  reasonable copies sold can't set the price. A cancel-and-repost at the same price is not a sale.
+- **Price history**: open any item for an hourly graph of its cheapest price in each house (72 h),
+  the 3-day median, the cheapest of 7 days and since tracking began (13 Nov 2026), and what buyers
+  paid. History cannot be backfilled: Blizzard only serves the current snapshot, and other sites'
+  terms forbid storing their data. One small `data/series/<id>.json` per listed item.
 - **Return (×)**: (sell × (1 − cut)) ÷ buy. Shown when ≥ ×1.15.
 - **Sold a day**: estimated where the buyers are: your house (Blackwater → home) or the other faction's
   house (home → Blackwater). Blackwater's own thin sales never set a quantity.

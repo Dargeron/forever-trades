@@ -30,6 +30,8 @@ HISTORY_DAYS = 14
 WINDOW_DAYS = 7
 MIN_SALES_HOURS = 6                            # below this: "warming", every price gap is listed, no volume filter
 EARLY_SALES_HOURS = 1                          # sales estimates are shown (flagged early) from the first hourly diff
+SERIES_HOURS = 72                              # hourly price points kept per item and house (state/series.json.gz)
+MIN_MEDIAN_POINTS = 3                          # hourly points needed before the median counts
 
 
 # --------------------------------------------------------------------------- API
@@ -177,8 +179,9 @@ def diff_sales(prev, cur, gap_hours):
       * a listing that shrank (partial buy of a stack) is a sale;
       * a listing that vanished while it still had 2+ hours left (12+ if snapshots
         were skipped) was bought or cancelled. We treat it as a cancellation when
-          - the same item was relisted with the same quantity at a lower price
-            (a typical undercut), or
+          - the same item was relisted with the same quantity at the same or a lower
+            price (an undercut, or a cancel-and-repost: on 13 Nov two 20g Billy Clubs
+            vanished and came back at 20g and were wrongly counted as sales), or
           - an older, cheaper listing of the item is still there (buyers take the
             cheapest stack first, so the dearer one was most likely pulled).
     """
@@ -211,7 +214,7 @@ def diff_sales(prev, cur, gap_hours):
         floor = survivors_min.get(item)
         relists = fresh.get(item, [])
         for qty, unit in lst:
-            match = next((f for f in relists if not f[2] and f[0] == qty and f[1] < unit), None)
+            match = next((f for f in relists if not f[2] and f[0] == qty and f[1] <= unit * 1.0001), None)
             if match:
                 match[2] = True
                 continue
@@ -283,6 +286,83 @@ def item_history(hist, house, item, now_dt):
     return spd, typ, hours
 
 
+def avg_paid(hist, house, item, now_dt):
+    """Average price buyers actually paid for the item on this house over up to 7 days
+    (estimated sales), or None if none were seen."""
+    h = hist.get(house) or {}
+    cutoff = day_of(now_dt - timedelta(days=WINDOW_DAYS))
+    days = [v for d, v in ((h.get('items') or {}).get(str(item)) or {}).items() if d > cutoff]
+    units = sum(v[0] for v in days)
+    return sum(v[1] for v in days) / units if units else None
+
+
+# --------------------------------------------------------------------------- price history
+def update_series(series, house, stats, snap_dt):
+    """Record this snapshot's cheapest listing and market price (15th percentile) per item.
+    series[house] = {'t': [epoch minutes], 'i': {item: [[low, mkt] or 0 per time]}}, last
+    SERIES_HOURS hours. The same snapshot is never recorded twice (forced rebuilds)."""
+    s = series.setdefault(house, {'t': [], 'i': {}})
+    tmin = int(snap_dt.timestamp() // 60)
+    if s['t'] and s['t'][-1] >= tmin:
+        return
+    n = len(s['t'])
+    s['t'].append(tmin)
+    for item, st in stats.items():
+        s['i'].setdefault(str(item), [0] * n).append([st['low'], st['mkt']])
+    for arr in s['i'].values():
+        if len(arr) < n + 1:
+            arr.append(0)
+    drop = 0
+    while drop < len(s['t']) and s['t'][drop] < tmin - SERIES_HOURS * 60:
+        drop += 1
+    if drop:
+        s['t'] = s['t'][drop:]
+        s['i'] = {k: arr[drop:] for k, arr in s['i'].items()}
+    s['i'] = {k: arr for k, arr in s['i'].items() if any(arr)}
+
+
+def series_median(series, house, item):
+    """Median hourly market price over the last SERIES_HOURS, once MIN_MEDIAN_POINTS exist."""
+    arr = ((series.get(house) or {}).get('i') or {}).get(str(item))
+    vals = sorted(p[1] for p in (arr or []) if p)
+    return vals[len(vals) // 2] if len(vals) >= MIN_MEDIAN_POINTS else None
+
+
+def update_alltime(alltime, house, stats, snap_dt):
+    """Cheapest listing ever seen per item and house since tracking began: [copper, date]."""
+    a = alltime.setdefault(house, {})
+    day = day_of(snap_dt)
+    for item, st in stats.items():
+        cur = a.get(str(item))
+        if cur is None or st['low'] < cur[0]:
+            a[str(item)] = [st['low'], day]
+
+
+def min_low_days(hist, house, item, now_dt, days=WINDOW_DAYS):
+    recs = ((hist.get(house) or {}).get('items') or {}).get(str(item)) or {}
+    cutoff = day_of(now_dt - timedelta(days=days))
+    vals = [v[4] for d, v in recs.items() if d > cutoff and v[4]]
+    return min(vals) if vals else None
+
+
+def item_file(i, data, series, hist, alltime, now_dt):
+    """Everything the site's price-history panel needs for one item, in all three houses."""
+    out = {'id': i, 'h': {}, 'd': {}, 's': {}}
+    for house in ('alliance', 'horde', 'neutral'):
+        s = series.get(house) or {}
+        arr = (s.get('i') or {}).get(str(i)) or []
+        out['h'][house] = [[s['t'][k], p[0], p[1]] for k, p in enumerate(arr) if p]
+        recs = ((hist.get(house) or {}).get('items') or {}).get(str(i)) or {}
+        out['d'][house] = [[d, v[4] or None, round(v[2] / v[3]) if v[3] else None, round(v[1] / v[0]) if v[0] else None, v[0]]
+                           for d, v in sorted(recs.items())]
+        st = data[house]['stats'].get(i)
+        paid = avg_paid(hist, house, i, now_dt)
+        out['s'][house] = {'now': st['low'] if st else None, 'med': series_median(series, house, i),
+                           'min7': min_low_days(hist, house, i, now_dt), 'minAll': (alltime.get(house) or {}).get(str(i)),
+                           'paid': int(round(paid)) if paid else None, 'qty': st['qty'] if st else 0}
+    return out
+
+
 # --------------------------------------------------------------------------- analysis
 def item_info(i, names_cache):
     v = ITEMS.get(str(i))
@@ -310,12 +390,14 @@ def gear_skip(info, s):
     return info[4] or (info[2] in ('Armor', 'Weapon') and s['variants'] > 1)
 
 
-def cautious(d, typ):
-    """The price to plan with on a house: its lowest listing, or its 7-day typical price if
-    that is lower; the typical alone if nothing is listed now; None if neither is known."""
-    if d:
-        return d['low'] if typ is None else min(d['low'], typ)
-    return typ
+def cautious(d, typ, paid=None, med=None):
+    """The price to plan with on a house: the lowest of its cheapest listing now, its 3-day
+    median market price (hourly), its 7-day typical price and the average price buyers actually
+    paid. Spike protection: when the reasonable copies have sold and only a few silly ones are
+    left (13 Nov: only 20g Billy Clubs in the Horde house while buyers paid a few silver), the
+    median and the paid price keep the plan honest. None if nothing is known."""
+    vals = [x for x in ((d['low'] if d else None), med, typ, paid) if x]
+    return min(vals) if vals else None
 
 
 def trend_of(d, typ):
@@ -360,7 +442,7 @@ def finish(out, warming):
     return out
 
 
-def busiest(hist, house, data, now_dt, names_cache):
+def busiest(hist, house, data, now_dt, names_cache, series=None):
     """Items people buy on Blackwater (`house`) that can be resold at a profit in the Alliance
     or Horde house: estimated units sold a day and the copper they sold for, over up to 7 days.
     An item stays only if a faction house's cautious price, after its cut, beats what buyers
@@ -383,8 +465,10 @@ def busiest(hist, house, data, now_dt, names_cache):
             continue
         i = int(item)
         avg = copper / units
-        a_ref = cautious(A.get(i), item_history(hist, 'alliance', i, now_dt)[1])
-        h_ref = cautious(Hd.get(i), item_history(hist, 'horde', i, now_dt)[1])
+        a_ref = cautious(A.get(i), item_history(hist, 'alliance', i, now_dt)[1], avg_paid(hist, 'alliance', i, now_dt),
+                         series_median(series or {}, 'alliance', i))
+        h_ref = cautious(Hd.get(i), item_history(hist, 'horde', i, now_dt)[1], avg_paid(hist, 'horde', i, now_dt),
+                         series_median(series or {}, 'horde', i))
         xa = a_ref * keep / avg if a_ref else None
         xh = h_ref * keep / avg if h_ref else None
         best = max([x for x in (xa, xh) if x is not None], default=None)
@@ -406,7 +490,7 @@ def busiest(hist, house, data, now_dt, names_cache):
     return out, hours, hidden
 
 
-def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_cache):
+def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_cache, series=None):
     """Buy on `src`, sell on `dst` at its cautious price (used for Blackwater -> home)."""
     S, D = src['stats'], dst['stats']
     out = []
@@ -418,7 +502,9 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
             continue
         d = D.get(item)
         spd, typ, _ = item_history(hist, dst_house, item, now_dt)
-        sell = cautious(d, typ)
+        paid = avg_paid(hist, dst_house, item, now_dt)
+        med = series_median(series or {}, dst_house, item)
+        sell = cautious(d, typ, paid, med)
         if not sell:
             continue
         back = sell * (1 - dst_cut)
@@ -434,7 +520,8 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
             id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
             buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
             sell=int(round(sell)), back=int(round(back)), dstQty=dst_qty, dstLow=d['low'] if d else None,
-            dstTyp=int(typ) if typ else None, soldDay=round(spd, 2) if spd is not None else None,
+            dstTyp=int(typ) if typ else None, dstPaid=int(round(paid)) if paid else None, dstMed=med,
+            soldDay=round(spd, 2) if spd is not None else None,
             unitsDay=round(units, 2) if units is not None else None,
             mult=round(mult, 3), profitEach=int(round(profit_each)),
             profitDay=int(round(profit_day)) if profit_day is not None else None,
@@ -444,7 +531,7 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
     return finish(out, warming), warming, dst_hours
 
 
-def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_dt, names_cache):
+def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_dt, names_cache, series=None):
     """Buy at home, sell on Blackwater to the other faction's traders.
 
     Almost nobody buys on Blackwater to use the item: the buyers are traders of the other
@@ -464,7 +551,9 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
             continue
         o = O.get(item)
         spd, typ, _ = item_history(hist, other_key, item, now_dt)
-        ref = cautious(o, typ)
+        paid = avg_paid(hist, other_key, item, now_dt)
+        med = series_median(series or {}, other_key, item)
+        ref = cautious(o, typ, paid, med)
         if not ref:
             continue
         half = ref * share
@@ -484,6 +573,7 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
             id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
             buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
             ref=int(round(ref)), refLow=o['low'] if o else None, refTyp=int(typ) if typ else None, refQty=o_qty,
+            refPaid=int(round(paid)) if paid else None, refMed=med,
             half=int(round(half)), undercut=undercut,
             sell=int(round(sell)), back=int(round(back)),
             dstQty=n['qty'] if n else 0, dstLow=n['low'] if n else None, dstTyp=None,
@@ -621,6 +711,8 @@ def cmd_run(api, args):
     houses = resolve_houses(api, meta_prev)
     hist = jload(os.path.join(state, 'history.json.gz'), {})
     names_cache = jload(os.path.join(state, 'names.json'), {})
+    series = jload(os.path.join(state, 'series.json.gz'), {})
+    alltime = jload(os.path.join(state, 'alltime.json.gz'), {})
     now = datetime.now(timezone.utc)
     data, changed = {}, False
     for key, hid in houses.items():
@@ -643,6 +735,8 @@ def cmd_run(api, args):
             sold = diff_sales(prev['a'], rows, gap)
         stats = summarise(rows)
         update_history(hist, key, stats, sold, snap_dt, gap)
+        update_series(series, key, stats, snap_dt)
+        update_alltime(alltime, key, stats, snap_dt)
         jsave(os.path.join(state, f'snap_{key}.json.gz'),
               {'t': snap_dt.isoformat(), 'a': {str(r['id']): [r['item'], r['qty'], round(r['unit'], 2), r['tl']] + ([r['var']] if r['var'] else [])
                                          for r in rows}})
@@ -666,6 +760,8 @@ def cmd_run(api, args):
             pm = (meta_prev.get('houses') or {}).get(key, {})
             data[key] = {'stats': summarise(rows), 'snap': datetime.fromisoformat(prev['t']), 'lm': pm.get('last_modified'),
                          'auctions': len(rows), 'sold_units': 0, 'gap': 0}
+            update_series(series, key, data[key]['stats'], data[key]['snap'])     # no-op if already recorded
+            update_alltime(alltime, key, data[key]['stats'], data[key]['snap'])
     # names for unknown items
     if not args.fixtures:
         seen = {k: set(data[k]['stats']) for k in houses}
@@ -678,7 +774,8 @@ def cmd_run(api, args):
     cuts = CONFIG['cuts']
     result = {'generated': now.isoformat(), 'siteVersion': (os.environ.get('GITHUB_SHA') or 'dev')[:12],
               'region': CONFIG['region'].upper(), 'ruleset': CONFIG['ruleset_name'],
-              'houseIds': houses, 'houses': {}, 'factions': {}}
+              'houseIds': houses, 'houses': {}, 'factions': {},
+              'trackingSince': min((d for h in hist.values() for d in (h.get('samples') or {})), default=day_of(now))}
     for key in houses:
         h = data[key]
         _, _, hours = item_history(hist, key, -1, now)
@@ -687,23 +784,35 @@ def cmd_run(api, args):
     share = CONFIG.get('other_faction_share', 0.5)
     for fac in ('alliance', 'horde'):
         other = 'horde' if fac == 'alliance' else 'alliance'
-        home_in, w1, h1 = opportunities(data['neutral'], data[fac], 'neutral', fac, cuts['faction'], hist, now, names_cache)
+        home_in, w1, h1 = opportunities(data['neutral'], data[fac], 'neutral', fac, cuts['faction'], hist, now, names_cache,
+                                        series)
         to_neu, w2, h2 = to_blackwater(data[fac], data['neutral'], data[other], fac, other, cuts['neutral'], share,
-                                       hist, now, names_cache)
+                                       hist, now, names_cache, series)
         result['factions'][fac] = {
             'buyNeutralSellHome': {'warming': w1, 'salesHours': round(h1, 1), 'items': home_in},
             'buyHomeSellNeutral': {'warming': w2, 'salesHours': round(h2, 1), 'refFaction': other, 'share': share,
                                    'items': to_neu}}
-    top, top_hours, hidden = busiest(hist, 'neutral', data, now, names_cache)
+    top, top_hours, hidden = busiest(hist, 'neutral', data, now, names_cache, series)
     result['neutralTop'] = {'salesHours': round(top_hours, 1), 'items': top,
                             'hiddenItems': hidden['items'], 'hiddenGold': hidden['gold']}
     os.makedirs(args.out, exist_ok=True)
     jsave(os.path.join(args.out, 'latest.json'), result)
+    # one small price-history file per listed item, loaded by the site when the item is opened
+    ids = {o['id'] for f in result['factions'].values() for v in f.values() for o in v['items']} | {o['id'] for o in top}
+    sdir = os.path.join(args.out, 'series')
+    os.makedirs(sdir, exist_ok=True)
+    for i in ids:
+        jsave(os.path.join(sdir, f'{i}.json'), item_file(i, data, series, hist, alltime, now))
+    result_since = min((d for h in hist.values() for d in (h.get('samples') or {})), default=day_of(now))
+    print(f'price history: {len(ids)} item files, series points per house',
+          {k: len((series.get(k) or {}).get('t', [])) for k in houses}, 'tracking since', result_since)
     meta = {'updated': now.isoformat(), 'house_ids': houses, 'house_match': meta_prev.get('house_match'),
             'houses': {k: {'id': houses[k], 'last_modified': data[k]['lm'], 'snapshot': data[k]['snap'].isoformat()} for k in houses}}
     jsave(os.path.join(state, 'meta.json'), meta)
     jsave(os.path.join(state, 'history.json.gz'), hist)
     jsave(os.path.join(state, 'names.json'), names_cache)
+    jsave(os.path.join(state, 'series.json.gz'), series)
+    jsave(os.path.join(state, 'alltime.json.gz'), alltime)
     for fac in ('alliance', 'horde'):
         f = result['factions'][fac]
         print(fac, 'neutral->home', len(f['buyNeutralSellHome']['items']), '| home->neutral', len(f['buyHomeSellNeutral']['items']))

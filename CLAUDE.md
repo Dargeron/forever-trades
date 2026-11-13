@@ -67,6 +67,14 @@ python3 -m http.server -d site 8000
   data; a page whose VERSION differs reloads once to `?v=<siteVersion>`. Keep the `dev` placeholders in the source.
 - Busiest table shows `low`/`aLow`/`hLow` = cheapest listing now (Blackwater empty when none); the resell ratios use
   the cautious `aRef`/`hRef`. Check layouts at 320–1440 px: the 9-column table drops columns at 1100/900/760/640.
+- **Spike protection / price history** (owner's request after a ×488 Billy Club): `cautious(low, typ, paid, med)` =
+  min of cheapest listing, 3-day hourly median market price (`series_median`, ≥3 points), 7-day typical and average
+  paid (`avg_paid`). `diff_sales` treats a same-or-lower-price repost of the same quantity as a cancel. State keeps
+  `series.json.gz` (per house: snapshot minutes `t` + per item `[low, mkt]` aligned, 72 h, ~3 MB gz when full) and
+  `alltime.json.gz` (cheapest ever + date). The pipeline writes `site/data/series/<id>.json` for every listed item;
+  the site loads it when an item is opened (graph + table). No backfill exists: history starts 13 Nov 2026.
+- Every item is clickable everywhere: table rows expand (`expandable`), chart dots and tile names open a card
+  (`openModal`). Details panels are built on first open, so no history file loads with the page.
 - Money display: g/s/c; coppers only under 10s; 10s and up rounded to silver; 100g+ shows gold only.
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 

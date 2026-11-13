@@ -170,6 +170,9 @@
           <li><b>Market a day</b>: sold a day × the price, so how much gold changes hands for that item each day.</li>
           <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market. <b>Profit a day</b> is your share × the profit on each item.</li>
           <li><b>Busiest on Blackwater</b>: items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house, by gold changing hands each day. <b>Resell in</b> shows where, and what each 1g spent on Blackwater brings back there after the 5% cut. Items that cost more on Blackwater than either house pays are left out: those are mostly players moving goods between their own characters.</li>
+          <li><b>Spike protection</b>: a selling price is never taken above the item's 3-day median price, its 7-day typical price or what buyers actually paid, so a few silly listings left after the cheap ones sold can't make a trade look good.</li>
+          <li><b>Price history</b>: open any item to see a graph of its cheapest price in each house, hour by hour, with the 3-day median, the cheapest of the last 7 days and since tracking began. The history starts on 13 Nov 2026 and grows with every snapshot.</li>
+          <li><b>Details</b>: tap any item, in any table, the chart or the summary, to see everything about it: prices in each house, what buyers actually paid, how many sell a day, your share and the profit.</li>
           <li><b>Sorting</b>: tap a column heading to sort by it; tap it again to flip the order. The arrow shows which column and which way.</li>
           <li><b>Chart search</b>: type part of a name above the chart (for example “recipe”) to show and label only the items that contain it. The chart keeps its scale, so every dot stays exactly where it was; the others just disappear.</li>
         </ul>
@@ -191,6 +194,15 @@
   </footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <h3 class="modal-title" id="modal-title"></h3>
+      <button type="button" class="modal-close" id="modal-close" aria-label="Close">×</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
 <script src="app.js?v=dev"></script>
 </body>
 </html>
