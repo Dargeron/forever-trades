@@ -49,9 +49,13 @@
         <label class="sort">Rank by
           <select id="sort">
             <option value="profitDay">Profit a day</option>
-            <option value="mult">Return (×)</option>
-            <option value="marketDay">Market size a day</option>
+            <option value="mult">Back per 1g (×)</option>
+            <option value="marketDay">Market a day</option>
+            <option value="soldDay">Sold a day</option>
             <option value="profitEach">Profit per item</option>
+            <option value="buy">Buy price</option>
+            <option value="sell">Sell price</option>
+            <option value="name">Name</option>
           </select>
         </label>
       </div>
@@ -61,13 +65,13 @@
           <thead>
             <tr>
               <th class="c-rank" scope="col">#</th>
-              <th class="c-item" scope="col">Item</th>
-              <th class="num hide-s" scope="col">Buy</th>
-              <th class="num hide-s" scope="col">Sell</th>
-              <th class="num c-ret" scope="col" title="What you get back for each 1g you spend, after the auction cut">Back per 1g</th>
-              <th class="num hide-s" scope="col" title="Gold changing hands for this item each day where your buyers are">Market a day</th>
-              <th class="num hide-m" scope="col">Sold a day</th>
-              <th class="c-bar" scope="col" id="th-bar">Profit a day</th>
+              <th class="c-item" scope="col" data-sort="name">Item</th>
+              <th class="num hide-s" scope="col" data-sort="buy">Buy</th>
+              <th class="num hide-s" scope="col" data-sort="sell">Sell</th>
+              <th class="num c-ret" scope="col" data-sort="mult" title="What you get back for each 1g you spend, after the auction cut">Back per 1g</th>
+              <th class="num hide-s" scope="col" data-sort="marketDay" title="Gold changing hands for this item each day where your buyers are">Market a day</th>
+              <th class="num hide-m" scope="col" data-sort="soldDay">Sold a day</th>
+              <th class="c-bar" scope="col" data-sort="profitDay" id="th-bar">Profit a day</th>
             </tr>
           </thead>
           <tbody id="rank-body"></tbody>
@@ -79,6 +83,7 @@
     <section class="card" id="scatter-card">
       <h2>Return against market size</h2>
       <p class="sub">Every item we have seen selling. Up means more money back for each gold you spend; right means more gold changes hands each day. Top-right is best. Hover or tap a dot to see the item.</p>
+      <div class="search-row chart-search"><input id="chart-search" type="search" placeholder="Show only items containing… (e.g. recipe)" aria-label="Show only items whose name contains this text"><span class="chart-count" id="chart-count" aria-live="polite"></span></div>
       <div class="scatter-wrap" id="scatter-wrap">
         <svg id="scatter" role="img" aria-label="Chart of return against market size, one dot per item"></svg>
       </div>
@@ -136,13 +141,14 @@
           <thead>
             <tr>
               <th class="c-rank" scope="col">#</th>
-              <th class="c-item" scope="col">Item</th>
-              <th class="num hide-s" scope="col">Sold a day</th>
-              <th class="num hide-s" scope="col">Average price</th>
-              <th class="c-bar" scope="col">Gold a day</th>
-              <th class="num hide-m" scope="col">Blackwater now</th>
-              <th class="num hide-m" scope="col">Alliance now</th>
-              <th class="num hide-m" scope="col">Horde now</th>
+              <th class="c-item" scope="col" data-sort="name">Item</th>
+              <th class="num hide-s" scope="col" data-sort="soldDay">Sold a day</th>
+              <th class="num hide-s" scope="col" data-sort="avg" title="Average price buyers paid on Blackwater">Price paid</th>
+              <th class="c-bar" scope="col" data-sort="marketDay">Gold a day</th>
+              <th class="hide-s" scope="col" data-sort="resellX" title="Faction house where it resells at a profit, and what each 1g spent on Blackwater brings back there after the 5% cut">Resell in</th>
+              <th class="num hide-m" scope="col" data-sort="low">Blackwater now</th>
+              <th class="num hide-m" scope="col" data-sort="aRef">Alliance</th>
+              <th class="num hide-m" scope="col" data-sort="hRef">Horde</th>
             </tr>
           </thead>
           <tbody id="busy-body"></tbody>
@@ -163,7 +169,9 @@
           <li><b>Sold a day</b>: how many units we saw sell where your buyers are, averaged over up to 7 days: your own faction's house when you sell at home, the other faction's house when you sell on Blackwater.</li>
           <li><b>Market a day</b>: sold a day × the price, so how much gold changes hands for that item each day.</li>
           <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market. <b>Profit a day</b> is your share × the profit on each item.</li>
-          <li><b>Busiest on Blackwater</b>: the items with the most gold changing hands each day on the neutral house, with today's Alliance and Horde prices next to them.</li>
+          <li><b>Busiest on Blackwater</b>: items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house, by gold changing hands each day. <b>Resell in</b> shows where, and what each 1g spent on Blackwater brings back there after the 5% cut. Items that cost more on Blackwater than either house pays are left out: those are mostly players moving goods between their own characters.</li>
+          <li><b>Sorting</b>: tap a column heading to sort by it; tap it again to flip the order. The arrow shows which column and which way.</li>
+          <li><b>Chart search</b>: type part of a name above the chart (for example “recipe”) to show and label only the items that contain it.</li>
         </ul>
       </details>
       <details>

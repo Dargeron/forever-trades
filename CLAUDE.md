@@ -52,7 +52,13 @@ python3 -m http.server -d site 8000
   quantity caps come from Alliance/Horde sales, never Blackwater's. The ½ is `other_faction_share` in config.json.
 - Sales estimates start after the first hourly diff (`EARLY_SALES_HOURS` = 1, flagged early on the site); below
   `MIN_SALES_HOURS` = 6 ("warming") every price gap is listed without a volume filter.
-- `neutralTop` (`busiest`): every item selling 0.5+/day on Blackwater by gold a day, with `route_of` = A>H / H>A / None.
+- `neutralTop` (`busiest`): items selling 0.5+/day on Blackwater that resell at a profit in a faction house
+  (cautious price × 0.95 > average price paid there), by gold a day; `xA`/`xH`/`resellX` are those ratios.
+  Owner's rule: drop anything dearer on Blackwater than both houses pay (cross-character transfers);
+  `hiddenItems`/`hiddenGold` count what was dropped.
+- Site sorting: every column heading with `data-sort` sorts its table (again flips; arrow + `aria-sort`); the
+  drop-down mirrors the ranked table. The chart has its own name filter (`#chart-search`, labels every match up to
+  30). Dark theme is the default; parchment via the ☀ button (localStorage).
 - Money display: g/s/c; coppers only under 10s; 10s and up rounded to silver; 100g+ shows gold only.
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 

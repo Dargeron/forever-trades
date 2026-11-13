@@ -4,14 +4,16 @@
 
   const S = {
     data: null, faction: 'alliance', dir: 'buyNeutralSellHome', sort: 'profitDay', budget: 100000,
-    showAll: false, open: new Set(), query: '', busyAll: false, busyQuery: '',
+    sortDir: 'desc', showAll: false, open: new Set(), query: '',
+    busySort: 'marketDay', busyDir: 'desc', busyAll: false, busyQuery: '', chartQuery: '',
   };
   const FAC = { alliance: 'Alliance', horde: 'Horde' };
   const OTHER = { alliance: 'Horde', horde: 'Alliance' };
   const PAGE = 40, BUSY_PAGE = 25;
-  const SORTS = { profitDay: 'Profit a day', mult: 'Return (×)', marketDay: 'Market size a day', profitEach: 'Profit per item' };
-  const KEY_LABEL = { profitDay: 'profit a day', mult: 'return', marketDay: 'market size a day', profitEach: 'profit per item' };
-  const BAR_HEAD = { profitDay: 'Profit a day', mult: 'Return', marketDay: 'Market a day', profitEach: 'Profit per item' };
+  const SORTS = { profitDay: 'Profit a day', mult: 'Back per 1g (×)', marketDay: 'Market a day', soldDay: 'Sold a day', profitEach: 'Profit per item', buy: 'Buy price', sell: 'Sell price', name: 'Name' };
+  const KEY_LABEL = { profitDay: 'profit a day', mult: 'back per 1g', marketDay: 'market a day', soldDay: 'sold a day', profitEach: 'profit per item', buy: 'buy price', sell: 'sell price', name: 'name' };
+  const ALWAYS = { mult: 1, profitEach: 1, buy: 1, sell: 1, name: 1 };
+  const BUSY_KEYS = { name: 1, soldDay: 1, avg: 1, marketDay: 1, resellX: 1, low: 1, aRef: 1, hRef: 1 };
   const $ = (id) => document.getElementById(id);
   const NS = 'http://www.w3.org/2000/svg';
 
@@ -87,7 +89,7 @@
     return (f && f[S.dir]) || { items: [], warming: true, salesHours: 0 };
   }
   const toBW = () => S.dir === 'buyHomeSellNeutral';
-  function hasKey(v, key) { return key === 'mult' || key === 'profitEach' || v.items.some((o) => o[key] > 0); }
+  function hasKey(v, key) { return !!ALWAYS[key] || v.items.some((o) => o[key] > 0); }
 
   // ---------- render
   function render() {
@@ -163,14 +165,35 @@
       tile('Best return', mult(topRet.mult), topRet));
   }
 
+  // ---------- sorting: the drop-down and the column headings
+  function defaultDir(key) { return key === 'name' ? 'asc' : 'desc'; }
+  function sortList(list, key, dir, tie) {
+    const sign = dir === 'asc' ? 1 : -1;
+    if (key === 'name') return list.sort((a, b) => sign * a.name.localeCompare(b.name));
+    const missing = (x) => x === null || x === undefined || Number.isNaN(x);
+    return list.sort((a, b) => {
+      const x = a[key], y = b[key];
+      if (missing(x) || missing(y)) return missing(x) === missing(y) ? tie(a, b) : (missing(x) ? 1 : -1);
+      return sign * (x - y) || tie(a, b);
+    });
+  }
+  function markHeaders(scope, key, dir) {
+    scope.querySelectorAll('th[data-sort]').forEach((th) => {
+      const on = th.dataset.sort === key;
+      th.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      const arrow = th.querySelector('.th-arrow');
+      if (arrow) arrow.textContent = on ? (dir === 'asc' ? '▲' : '▼') : '↕';
+    });
+  }
+
   // ---------- ranked table
   function sorted(v) {
     const key = hasKey(v, S.sort) ? S.sort : 'profitEach';
+    const dir = key === S.sort ? S.sortDir : 'desc';
     let list = v.items.slice();
     if (S.query) { const q = S.query.toLowerCase(); list = list.filter((o) => o.name.toLowerCase().includes(q)); }
-    const val = (o) => (o[key] === null || o[key] === undefined ? -Infinity : o[key]);
-    list.sort((a, b) => (val(b) - val(a)) || (b.profitEach - a.profitEach));
-    return { list, key };
+    sortList(list, key, dir, (a, b) => b.profitEach - a.profitEach);
+    return { list, key, dir };
   }
 
   function updateSortOptions(v) {
@@ -181,19 +204,16 @@
     });
   }
 
-  function barCell(o, key, max, logScale) {
+  function barCell(o, key, max) {
     const td = el('td', 'c-bar');
     const val = el('span', 'val');
     const x = o[key];
-    if (key === 'mult') val.append(mult(o.mult));
-    else if (bad(x) || (key !== 'profitEach' && !x)) {
+    if (bad(x) || !x) {
       if (key === 'profitDay') val.append(el('span', 'muted', '+' + money(o.profitEach) + ' each'));
-      else val.append(el('span', 'muted', 'no sales yet'));
+      else val.append(el('span', 'muted', '–'));
     } else val.append(coins(x, key !== 'marketDay'), el('span', 'per', key === 'profitEach' ? ' each' : ' a day'));
     const track = el('span', 'track'), fill = el('span', 'fill');
-    let w = 0;
-    if (x > 0) w = logScale ? Math.max(0, Math.log10(x) - logScale[0]) / Math.max(0.0001, Math.log10(max) - logScale[0]) : x / max;
-    fill.style.width = Math.max(x > 0 ? 1.5 : 0, Math.min(100, 100 * w)) + '%';
+    fill.style.width = (x > 0 ? Math.max(1.5, Math.min(100, 100 * x / max)) : 0) + '%';
     track.append(fill); td.append(val, track);
     return td;
   }
@@ -202,19 +222,23 @@
 
   function renderTable(v) {
     updateSortOptions(v);
-    const { list, key } = sorted(v);
+    const { list, key, dir } = sorted(v);
     $('sort').value = key;
     const other = OTHER[S.faction];
+    const barKey = key === 'profitEach' || !hasKey(v, 'profitDay') ? 'profitEach' : 'profitDay';
+    const thb = $('th-bar');
+    thb.dataset.sort = barKey;
+    thb.querySelector('.th-label').textContent = barKey === 'profitEach' ? 'Profit per item' : 'Profit a day';
+    markHeaders($('rank-card'), key, dir);
     $('rank-title').textContent = v.items.length ? 'All ' + v.items.length + ' opportunities' : 'Opportunities';
-    $('rank-sub').textContent = 'Ranked by ' + KEY_LABEL[key] + '. Shading: darker means a bigger return or a bigger market. Tap a row for the details.';
-    $('th-bar').textContent = BAR_HEAD[key];
+    const order = key === 'name' ? (dir === 'asc' ? 'A to Z' : 'Z to A') : (dir === 'asc' ? 'lowest first' : 'highest first');
+    $('rank-sub').textContent = 'Sorted by ' + KEY_LABEL[key] + ', ' + order + '. Tap a column heading to sort by it (again to flip), or a row for the details. Shading: darker means a bigger return or a bigger market.';
     const tb = $('rank-body'); tb.textContent = '';
     if (!list.length) {
       const tr = el('tr'), td = el('td', 'empty', S.query ? 'No item matches “' + S.query + '”.' : 'No item clears a ×1.15 return right now. Check back after the next update.');
       td.colSpan = 8; tr.append(td); tb.append(tr); $('more').hidden = true; return;
     }
-    const max = Math.max.apply(null, list.map((o) => o[key] || 0)) || 1;
-    const logScale = key === 'mult' ? [Math.log10(1.1)] : (key === 'marketDay' ? [Math.log10(Math.max(1, Math.min.apply(null, list.filter((o) => o.marketDay > 0).map((o) => o.marketDay).concat([max])) / 2))] : null);
+    const max = Math.max.apply(null, list.map((o) => o[barKey] || 0)) || 1;
     const shown = S.showAll || S.query ? list : list.slice(0, PAGE);
     shown.forEach((o, i) => {
       const tr = el('tr', 'row');
@@ -233,7 +257,7 @@
       tr.append(ti, numTd(coins(o.buy), 'hide-s'), numTd(coins(o.sell), 'hide-s'));
       const tdr = numTd(mult(o.mult), 'ret c-ret'); shade(tdr, o.mult, Math.log10(1.15), Math.log10(30)); tr.append(tdr);
       const tdm = numTd(o.marketDay ? coins(o.marketDay) : '–', 'mkt hide-s'); if (o.marketDay) shade(tdm, o.marketDay, 4, 6.7); tr.append(tdm);
-      tr.append(numTd(soldTxt(o), 'hide-m'), barCell(o, key, max, logScale));
+      tr.append(numTd(soldTxt(o), 'hide-m'), barCell(o, barKey, max));
       const dr = el('tr', 'details-row');
       dr.hidden = !S.open.has(o.id);
       const dtd = el('td'); dtd.colSpan = 8; dtd.append(details(o)); dr.append(dtd);
@@ -328,13 +352,16 @@
 
   function renderScatter(v, bask) {
     const svg = $('scatter'), empty = $('scatter-empty'), legend = $('legend');
-    const pts = v.items.filter((o) => o.marketDay > 0 && o.mult > 0);
+    const all = v.items.filter((o) => o.marketDay > 0 && o.mult > 0);
+    const q = S.chartQuery.toLowerCase();
+    const pts = q ? all.filter((o) => o.name.toLowerCase().includes(q)) : all;
+    $('chart-count').textContent = !all.length ? '' : (q ? 'Showing ' + pts.length + ' of ' + all.length + ' items' : all.length + ' items');
     svg.textContent = '';
-    if (pts.length < 2) {
+    if (!pts.length || (!q && pts.length < 2)) {
       svg.style.display = 'none'; legend.hidden = true; empty.hidden = false;
-      empty.textContent = (v.salesHours || 0) < 1
-        ? 'The chart appears after the next hourly update, once we have seen what sells.'
-        : 'Not enough items seen selling yet. Check back after the next update.';
+      empty.textContent = !all.length || (!q && all.length < 2)
+        ? ((v.salesHours || 0) < 1 ? 'The chart appears after the next hourly update, once we have seen what sells.' : 'Not enough items seen selling yet. Check back after the next update.')
+        : 'No item on the chart contains “' + S.chartQuery + '”.';
       return;
     }
     svg.style.display = ''; legend.hidden = false; empty.hidden = true;
@@ -344,7 +371,8 @@
     const m = { l: narrow ? 42 : 54, r: 14, t: 14, b: 46 };
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     const xs = pts.map((o) => Math.log10(o.marketDay)), ys = pts.map((o) => Math.log10(o.mult));
-    const x0 = Math.min.apply(null, xs) - 0.12, x1 = Math.max.apply(null, xs) + 0.12;
+    let x0 = Math.min.apply(null, xs) - 0.12, x1 = Math.max.apply(null, xs) + 0.12;
+    if (x1 - x0 < 1.2) { const mid = (x0 + x1) / 2; x0 = mid - 0.6; x1 = mid + 0.6; }   // a few dots: keep a 10x-plus span of gold ticks
     const y0 = Math.log10(1.1), y1 = Math.max(Math.log10(3), Math.max.apply(null, ys) + 0.08);
     const X = (lv) => m.l + (lv - x0) / (x1 - x0) * (W - m.l - m.r);
     const Y = (lv) => H - m.b - (lv - y0) / (y1 - y0) * (H - m.t - m.b);
@@ -398,7 +426,7 @@
     // direct labels for the biggest earners, skipping any that would collide
     const labels = svgEl('g'), boxes = [];
     const rank = (o) => (o.profitDay || 0) || (o.marketDay || 0) / 1e6;
-    pts.slice().sort((a, b) => rank(b) - rank(a)).slice(0, narrow ? 7 : 14).forEach((o) => {
+    pts.slice().sort((a, b) => rank(b) - rank(a)).slice(0, q ? (narrow ? 12 : 30) : (narrow ? 7 : 14)).forEach((o) => {
       const cx = X(Math.log10(o.marketDay)), cy = Y(Math.log10(o.mult)), r = R(o);
       const name = o.name.length > 26 ? o.name.slice(0, 25) + '…' : o.name;
       const w = name.length * 6.2 + 6, h = 15;
@@ -501,19 +529,30 @@
     box.append(btn);
   }
 
-  // ---------- busiest on Blackwater
+  // ---------- busiest on Blackwater: only items that resell at a profit in a faction house
+  function resellBadges(o) {
+    const s = el('span', 'badges');
+    [['alliance', o.xA], ['horde', o.xH]].filter((p) => p[1] > 1).sort((a, b) => b[1] - a[1])
+      .forEach(([fac, x]) => s.append(el('span', 'badge ' + fac, FAC[fac] + ' ' + mult(x))));
+    return s;
+  }
   function renderBusy() {
     const t = S.data.neutralTop || { items: [], salesHours: 0 };
     const h = t.salesHours || 0;
-    $('busy-sub').textContent = h < 1
-      ? 'Gold changing hands each day on the neutral house. Appears after the next hourly update.'
-      : 'Every item seen selling on the neutral house, by gold changing hands a day (' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of data' + (h < 24 ? ', early estimates' : '') + '). The route shows who profits: A → H means Alliance sellers list it here and Horde traders still profit reselling it at home; no route usually means people buy it to use.';
+    const sub = $('busy-sub'); sub.textContent = '';
+    if (h < 1) sub.append('Items people buy on the neutral house that resell at a profit at home. Appears after the next hourly update.');
+    else {
+      sub.append('Items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house (after its 5% cut), by gold changing hands a day (' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of data' + (h < 24 ? ', early estimates' : '') + '). ');
+      if (t.hiddenItems) sub.append('Left out: ' + t.hiddenItems.toLocaleString('en') + ' items (', coins(t.hiddenGold), ' a day) that cost more here than either house pays, mostly players moving goods between their own characters.');
+    }
+    markHeaders($('busy-card'), S.busySort, S.busyDir);
     const tb = $('busy-body'); tb.textContent = '';
-    let list = t.items;
+    let list = (t.items || []).slice();
     if (S.busyQuery) { const q = S.busyQuery.toLowerCase(); list = list.filter((o) => o.name.toLowerCase().includes(q)); }
+    sortList(list, S.busySort, S.busyDir, (a, b) => b.marketDay - a.marketDay);
     if (!list.length) {
-      const tr = el('tr'), td = el('td', 'empty', S.busyQuery ? 'No item matches “' + S.busyQuery + '”.' : 'No sales seen yet.');
-      td.colSpan = 8; tr.append(td); tb.append(tr); $('busy-more').hidden = true; return;
+      const tr = el('tr'), td = el('td', 'empty', S.busyQuery ? 'No item matches “' + S.busyQuery + '”.' : 'No profitable Blackwater sales seen yet.');
+      td.colSpan = 9; tr.append(td); tb.append(tr); $('busy-more').hidden = true; return;
     }
     const max = Math.max.apply(null, list.map((o) => o.marketDay)) || 1;
     const shown = S.busyAll || S.busyQuery ? list : list.slice(0, BUSY_PAGE);
@@ -522,16 +561,15 @@
       tr.append(el('td', 'c-rank', String(i + 1)));
       const ti = el('td', 'c-item');
       ti.append(itemName(o));
-      if (o.route) ti.append(' ', el('span', 'badge ' + (o.route === 'A>H' ? 'ah' : 'ha'), o.route === 'A>H' ? 'A → H' : 'H → A'));
-      const sub = el('span', 'item-sub only-s');
-      sub.append(num(o.soldDay, 1) + ' a day at ', coins(o.avg));
-      ti.append(sub);
-      tr.append(ti, numTd(num(o.soldDay, 1), 'hide-s'), numTd(coins(o.avg), 'hide-s'));
-      tr.append(barCell({ marketDay: o.marketDay }, 'marketDay', max, null));
-      const lo = Math.min(o.aLow || Infinity, o.hLow || Infinity);
-      tr.append(numTd(o.low ? coins(o.low) : 'none listed', 'hide-m'),
-        numTd(coins(o.aLow), 'hide-m' + (o.aLow && o.aLow === lo ? ' lo' : '')),
-        numTd(coins(o.hLow), 'hide-m' + (o.hLow && o.hLow === lo ? ' lo' : '')));
+      const subl = el('span', 'item-sub only-s');
+      subl.append(num(o.soldDay, 1) + ' a day at ', coins(o.avg), ' ', resellBadges(o));
+      ti.append(subl);
+      const rs = el('td', 'hide-s'); rs.append(resellBadges(o));
+      const best = (o.xA || 0) >= (o.xH || 0) ? 'a' : 'h';
+      tr.append(ti, numTd(num(o.soldDay, 1), 'hide-s'), numTd(coins(o.avg), 'hide-s'), barCell({ marketDay: o.marketDay }, 'marketDay', max), rs,
+        numTd(o.low ? coins(o.low) : 'none listed', 'hide-m'),
+        numTd(coins(o.aRef), 'hide-m' + (best === 'a' ? ' lo' : '')),
+        numTd(coins(o.hRef), 'hide-m' + (best === 'h' ? ' lo' : '')));
       tb.append(tr);
     });
     const more = $('busy-more');
@@ -542,18 +580,44 @@
   }
 
   // ---------- events
+  document.querySelectorAll('th[data-sort]').forEach((th) => {
+    const label = th.textContent.trim();
+    th.textContent = '';
+    const b = el('button', 'th-btn');
+    b.type = 'button';
+    const arrow = el('span', 'th-arrow', '↕');
+    arrow.setAttribute('aria-hidden', 'true');
+    b.append(el('span', 'th-label', label), arrow);
+    th.append(b);
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = th.dataset.sort;
+      if (th.closest('#busy-card')) {
+        if (S.busySort === key) S.busyDir = S.busyDir === 'asc' ? 'desc' : 'asc'; else { S.busySort = key; S.busyDir = defaultDir(key); }
+        remember('busySort', S.busySort + ':' + S.busyDir);
+        renderBusy();
+      } else {
+        const v = view();
+        const cur = sorted(v);
+        if (cur.key === key) { S.sort = key; S.sortDir = cur.dir === 'asc' ? 'desc' : 'asc'; } else { S.sort = key; S.sortDir = defaultDir(key); }
+        remember('sort', S.sort + ':' + S.sortDir);
+        renderTable(v);
+      }
+    });
+  });
   document.querySelectorAll('[data-faction]').forEach((b) => b.addEventListener('click', () => {
     S.faction = b.dataset.faction; remember('faction', S.faction); S.showAll = false; S.open.clear(); render();
   }));
   document.querySelectorAll('[data-dir]').forEach((b) => b.addEventListener('click', () => {
     S.dir = b.dataset.dir; remember('dir', S.dir); S.showAll = false; S.open.clear(); render();
   }));
-  $('sort').addEventListener('change', (e) => { S.sort = e.target.value; remember('sort', S.sort); render(); });
+  $('sort').addEventListener('change', (e) => { S.sort = e.target.value; S.sortDir = defaultDir(S.sort); remember('sort', S.sort + ':' + S.sortDir); renderTable(view()); });
   $('budget').addEventListener('change', (e) => { S.budget = Number(e.target.value); remember('budget', S.budget); render(); });
   $('more').addEventListener('click', () => { S.showAll = !S.showAll; renderTable(view()); });
   $('search').addEventListener('input', (e) => { S.query = e.target.value.trim(); renderTable(view()); });
   $('busy-more').addEventListener('click', () => { S.busyAll = !S.busyAll; renderBusy(); });
   $('busy-search').addEventListener('input', (e) => { S.busyQuery = e.target.value.trim(); renderBusy(); });
+  $('chart-search').addEventListener('input', (e) => { S.chartQuery = e.target.value.trim(); $('tooltip').hidden = true; renderScatter(view(), basket(view(), S.budget)); });
   document.addEventListener('click', () => { $('tooltip').hidden = true; });
   window.addEventListener('scroll', () => { $('tooltip').hidden = true; }, { passive: true });
   let rt;
@@ -581,7 +645,10 @@
   applyTheme(recall('theme') === 'light');
   const f = recall('faction'); if (f && FAC[f]) S.faction = f;
   const d = recall('dir'); if (d === 'buyNeutralSellHome' || d === 'buyHomeSellNeutral') S.dir = d;
-  const so = recall('sort'); if (so && SORTS[so]) S.sort = so;
+  const so = (recall('sort') || '').split(':');
+  if (SORTS[so[0]]) { S.sort = so[0]; S.sortDir = so[1] === 'asc' || so[1] === 'desc' ? so[1] : defaultDir(so[0]); }
+  const bs = (recall('busySort') || '').split(':');
+  if (BUSY_KEYS[bs[0]]) { S.busySort = bs[0]; S.busyDir = bs[1] === 'asc' || bs[1] === 'desc' ? bs[1] : defaultDir(bs[0]); }
   const bg = Number(recall('budget')); if (bg) { S.budget = bg; $('budget').value = String(bg); }
   load();
 })();

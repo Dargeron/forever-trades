@@ -115,6 +115,15 @@ def main():
     top = out['neutralTop']['items']
     assert top and all(a['marketDay'] >= b['marketDay'] for a, b in zip(top, top[1:])), 'neutralTop'
     assert all(o['soldDay'] >= 0.5 and o['avg'] > 0 for o in top), 'neutralTop values'
+    for o in top:   # only items that resell at a profit in a faction house after its 5% cut
+        assert o['resellX'] > 1 and abs(o['resellX'] - max(x for x in (o['xA'], o['xH']) if x)) < 1e-6, o
+        for ref, x in ((o['aRef'], o['xA']), (o['hRef'], o['xH'])):
+            assert (ref is None) == (x is None), o
+            if x is not None:   # ref and avg are rounded to whole coppers; x was computed before rounding
+                lo = (ref - 0.5) * 0.95 / (o['avg'] + 0.5)
+                hi = (ref + 0.5) * 0.95 / max(0.01, o['avg'] - 0.5)
+                assert lo - 1e-3 <= x <= hi + 1e-3, (o, lo, hi)
+    print('busiest: left out', out['neutralTop']['hiddenItems'], 'items dearer on Blackwater than either house pays')
     print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')
     print('selftest OK ->', os.path.join(TMP, 'out', 'latest.json'))
 

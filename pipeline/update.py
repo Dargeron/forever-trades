@@ -361,14 +361,18 @@ def finish(out, warming):
 
 
 def busiest(hist, house, data, now_dt, names_cache):
-    """Items with the most gold changing hands a day on `house`: estimated units sold a day
-    and the copper they sold for, over up to 7 days. Every item seen selling 0.5+ a day."""
+    """Items people buy on Blackwater (`house`) that can be resold at a profit in the Alliance
+    or Horde house: estimated units sold a day and the copper they sold for, over up to 7 days.
+    An item stays only if a faction house's cautious price, after its cut, beats what buyers
+    paid on Blackwater. Items dearer here than both houses pay are left out: they are mostly
+    players moving goods between their own characters. Returns (items, hours, hidden)."""
     h = hist.get(house) or {}
     cutoff = day_of(now_dt - timedelta(days=WINDOW_DAYS))
     hours = sum(v for d, v in (h.get('hours') or {}).items() if d > cutoff)
-    out = []
+    out, hidden = [], {'items': 0, 'gold': 0}
     if hours < EARLY_SALES_HOURS:
-        return out, hours
+        return out, hours, hidden
+    keep = 1 - CONFIG['cuts']['faction']
     S = data[house]['stats']
     A, Hd = data['alliance']['stats'], data['horde']['stats']
     for item, days in (h.get('items') or {}).items():
@@ -378,32 +382,27 @@ def busiest(hist, house, data, now_dt, names_cache):
         if units <= 0 or spd < 0.5:
             continue
         i = int(item)
-        info = item_info(i, names_cache)
-        s, a, hh = S.get(i), A.get(i), Hd.get(i)
         avg = copper / units
-        a_low, h_low = (a['low'] if a else None), (hh['low'] if hh else None)
+        a_ref = cautious(A.get(i), item_history(hist, 'alliance', i, now_dt)[1])
+        h_ref = cautious(Hd.get(i), item_history(hist, 'horde', i, now_dt)[1])
+        xa = a_ref * keep / avg if a_ref else None
+        xh = h_ref * keep / avg if h_ref else None
+        best = max([x for x in (xa, xh) if x is not None], default=None)
+        if not best or best <= 1:
+            hidden['items'] += 1
+            hidden['gold'] += copper / hours * 24
+            continue
+        info = item_info(i, names_cache)
+        s = S.get(i)
         out.append(dict(id=i, name=info[0], q=info[1], cls=info[2], soldDay=round(spd, 2),
                         avg=int(round(avg)), marketDay=int(round(copper / hours * 24)),
                         low=s['low'] if s else None, qty=s['qty'] if s else 0,
-                        aLow=a_low, hLow=h_low, route=route_of(avg, a_low, h_low)))
+                        aRef=int(round(a_ref)) if a_ref else None, hRef=int(round(h_ref)) if h_ref else None,
+                        xA=round(xa, 3) if xa else None, xH=round(xh, 3) if xh else None,
+                        resellX=round(best, 3)))
     out.sort(key=lambda o: -o['marketDay'])
-    return out, hours
-
-
-def route_of(bw, a, h, faction_cut=None, neutral_cut=None):
-    """Who is making money when this item sells on Blackwater at `bw`? 'A>H' if an Alliance
-    seller beats the Alliance price after Blackwater's cut AND a Horde buyer can still resell
-    it in the Horde house at a profit after that house's cut; 'H>A' the other way round; None
-    if neither holds (then it is mostly bought for use, or the estimate is noise)."""
-    fc = CONFIG['cuts']['faction'] if faction_cut is None else faction_cut
-    nc = CONFIG['cuts']['neutral'] if neutral_cut is None else neutral_cut
-    if not a or not h or not bw:
-        return None
-    if bw * (1 - nc) > a and h * (1 - fc) > bw:
-        return 'A>H'
-    if bw * (1 - nc) > h and a * (1 - fc) > bw:
-        return 'H>A'
-    return None
+    hidden['gold'] = int(round(hidden['gold']))
+    return out, hours, hidden
 
 
 def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_cache):
@@ -693,8 +692,9 @@ def cmd_run(api, args):
             'buyNeutralSellHome': {'warming': w1, 'salesHours': round(h1, 1), 'items': home_in},
             'buyHomeSellNeutral': {'warming': w2, 'salesHours': round(h2, 1), 'refFaction': other, 'share': share,
                                    'items': to_neu}}
-    top, top_hours = busiest(hist, 'neutral', data, now, names_cache)
-    result['neutralTop'] = {'salesHours': round(top_hours, 1), 'items': top}
+    top, top_hours, hidden = busiest(hist, 'neutral', data, now, names_cache)
+    result['neutralTop'] = {'salesHours': round(top_hours, 1), 'items': top,
+                            'hiddenItems': hidden['items'], 'hiddenGold': hidden['gold']}
     os.makedirs(args.out, exist_ok=True)
     jsave(os.path.join(args.out, 'latest.json'), result)
     meta = {'updated': now.isoformat(), 'house_ids': houses, 'house_match': meta_prev.get('house_match'),

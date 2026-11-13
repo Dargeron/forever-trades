@@ -398,9 +398,17 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
 - **New sections, modelled on the owner's cross-faction PDF:** a real ranked table (buy, sell, back per
   1g and market a day shaded, sold a day, bar), the return-vs-market chart (log axes in gold, ×2/×10
   guides, labels, hover/tap tooltip, dot size by profit a day, ring for shopping-list items), the ten
-  biggest markets and ten biggest returns, and **Busiest on Blackwater** with a cross-faction route.
-  On the first hour of live data, only about 12% of Blackwater's gold volume had a clear route
-  (e.g. Recipe: Savory Whimsyfin Delight and Shellfish, A → H); most of the rest is bought for use.
+  biggest markets and ten biggest returns, and **Busiest on Blackwater**.
+- **Sortable column headings** (owner's request): tap a heading to sort, again to flip; an arrow and a
+  highlighted heading show the order. Works on both tables; the drop-down follows.
+- **Busiest on Blackwater keeps only items someone can profit from** (owner's rule): an item stays if
+  the Alliance or Horde price after the 5% cut beats the average price paid on Blackwater. Items dearer
+  on Blackwater than both houses pay are dropped: mostly players moving goods between their own
+  characters. On 2 hours of live data (17:25 UTC) that kept 201 items (~6,220g a day) and dropped 527
+  (~14,165g a day), so about two-thirds of Blackwater's gold volume looks like cross-character transfers.
+- **Dark theme is the default** (owner's request); parchment is one tap away and remembered.
+- **Chart search** (owner's request): a box above the chart keeps only items whose name contains the text
+  (e.g. "recipe") and labels them.
 - **World of Warcraft look**: dark leather and gold trim (parchment in light mode), Cinzel headings,
   quality colours, gold/silver/copper coin colours, Alliance/Horde switch colours, in-game style tooltip.
   No Blizzard art or logos.

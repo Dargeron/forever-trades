@@ -9,10 +9,10 @@ A small website for **WoW: Forever, EU PvP** that shows, for Alliance or Horde:
   the other faction's house, priced for the other faction's traders who buy on
   Blackwater and resell at home (see Numbers), after Blackwater's 15% cut.
 
-Every opportunity is ranked and named in a table, with a return-vs-market-size
-chart, the ten biggest markets and returns, a shopping list for a chosen budget,
-and a list of the busiest items on Blackwater (gold changing hands a day, with the
-cross-faction route when there is one).
+Every opportunity is ranked and named in a table (tap any column heading to sort),
+with a return-vs-market-size chart (with a name filter, e.g. "recipe"), the ten biggest markets and returns, a shopping
+list for a chosen budget, and the busiest items on Blackwater that can be resold at
+a profit in the Alliance or Horde house.
 
 ## How it updates
 
@@ -77,9 +77,11 @@ Only the Python standard library is used.
 - **Early data**: sales figures appear after the first hourly comparison and are marked early. For the
   first 6 hours every price gap is listed; after that only items selling at least 0.5 a day. Lists are
   never cut to a top N.
-- **Busiest on Blackwater**: every item seen selling there, by gold a day (units × the prices they sold
-  at). Route A → H when an Alliance seller beats the Alliance price after the 15% cut and a Horde trader
-  still beats that price after the 5% cut at home (H → A the other way round).
+- **Busiest on Blackwater**: items seen selling there (0.5+ a day) that can be resold at a profit in the
+  Alliance or Horde house: that house's cautious price × 0.95 must beat the average price paid on
+  Blackwater. "Resell in" shows the house and that ratio. Items dearer on Blackwater than both houses pay
+  are left out (mostly players moving goods between their own characters); the site states how many and
+  how much gold a day they were.
 - Deposits are not included.
 
 ## Credits
