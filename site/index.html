@@ -5,16 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forever Trades</title>
 <meta name="description" content="What to buy on the WoW: Forever neutral auction house and sell at home (and the reverse), EU PvP, updated hourly from Blizzard's API.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23eda100'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' font-family='sans-serif' font-weight='700' fill='%23111'%3Eg%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#120d08">
+<script>try { if (localStorage.getItem('ft-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) { /* ignore */ }</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.35' cy='.3' r='.8'%3E%3Cstop offset='0' stop-color='%23fff2b0'/%3E%3Cstop offset='.55' stop-color='%23e3a92f'/%3E%3Cstop offset='1' stop-color='%23845212'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='14' fill='url(%23g)' stroke='%235a3608' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%23845212' stroke-width='1' opacity='.6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="page">
   <header class="top">
-    <div class="title-row">
-      <h1>Forever Trades</h1>
-      <span class="realm-chip">EU · PvP</span>
-    </div>
+    <button type="button" class="theme-btn" id="theme" aria-label="Switch to the parchment (light) theme"><span aria-hidden="true">☀</span><span class="t-label"> Parchment</span></button>
+    <p class="kicker">WoW: Forever · EU PvP</p>
+    <h1>Forever Trades</h1>
     <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater. Prices come from Blizzard every hour.</p>
     <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
   </header>
@@ -52,15 +56,51 @@
         </label>
       </div>
       <div class="search-row"><input id="search" type="search" placeholder="Find an item…" aria-label="Find an item"></div>
-      <ol class="bars" id="bars"></ol>
+      <div class="table-wrap">
+        <table class="grid rank">
+          <thead>
+            <tr>
+              <th class="c-rank" scope="col">#</th>
+              <th class="c-item" scope="col">Item</th>
+              <th class="num hide-s" scope="col">Buy</th>
+              <th class="num hide-s" scope="col">Sell</th>
+              <th class="num c-ret" scope="col" title="What you get back for each 1g you spend, after the auction cut">Back per 1g</th>
+              <th class="num hide-s" scope="col" title="Gold changing hands for this item each day where your buyers are">Market a day</th>
+              <th class="num hide-m" scope="col">Sold a day</th>
+              <th class="c-bar" scope="col" id="th-bar">Profit a day</th>
+            </tr>
+          </thead>
+          <tbody id="rank-body"></tbody>
+        </table>
+      </div>
       <button type="button" class="more" id="more" hidden></button>
     </section>
 
     <section class="card" id="scatter-card">
-      <h2>Return vs market size</h2>
-      <p class="sub">Each dot is an item. Up means a bigger return on what you pay; right means more gold changes hands each day. Top-right is best. Tap a dot for details.</p>
+      <h2>Return against market size</h2>
+      <p class="sub">Every item we have seen selling. Up means more money back for each gold you spend; right means more gold changes hands each day. Top-right is best. Hover or tap a dot to see the item.</p>
       <div class="scatter-wrap" id="scatter-wrap">
-        <svg id="scatter" role="img" aria-label="Scatter chart of return against market size"></svg>
+        <svg id="scatter" role="img" aria-label="Chart of return against market size, one dot per item"></svg>
+      </div>
+      <p class="legend" id="legend">
+        <span><i class="sw solid"></i>Solid: ×2 or more</span>
+        <span><i class="sw fair"></i>Fair: ×1.15 to ×2</span>
+        <span><i class="sw ring"></i>In your shopping list</span>
+        <span>Bigger dot: more profit a day</span>
+      </p>
+      <p class="empty" id="scatter-empty" hidden></p>
+    </section>
+
+    <section class="pair" aria-label="Top ten lists">
+      <div class="card">
+        <h2>Ten biggest markets</h2>
+        <p class="sub">Returning at least ×2</p>
+        <table class="grid mini" id="top-markets"></table>
+      </div>
+      <div class="card">
+        <h2>Ten biggest returns</h2>
+        <p class="sub">Selling at least 4 a day</p>
+        <table class="grid mini" id="top-returns"></table>
       </div>
     </section>
 
@@ -83,24 +123,52 @@
       <div id="basket"></div>
     </section>
 
+    <section class="card" id="busy-card">
+      <div class="card-head">
+        <div>
+          <h2>Busiest on Blackwater</h2>
+          <p class="sub" id="busy-sub"></p>
+        </div>
+      </div>
+      <div class="search-row"><input id="busy-search" type="search" placeholder="Find an item…" aria-label="Find an item on Blackwater"></div>
+      <div class="table-wrap">
+        <table class="grid rank busy">
+          <thead>
+            <tr>
+              <th class="c-rank" scope="col">#</th>
+              <th class="c-item" scope="col">Item</th>
+              <th class="num hide-s" scope="col">Sold a day</th>
+              <th class="num hide-s" scope="col">Average price</th>
+              <th class="c-bar" scope="col">Gold a day</th>
+              <th class="num hide-m" scope="col">Blackwater now</th>
+              <th class="num hide-m" scope="col">Alliance now</th>
+              <th class="num hide-m" scope="col">Horde now</th>
+            </tr>
+          </thead>
+          <tbody id="busy-body"></tbody>
+        </table>
+      </div>
+      <button type="button" class="more" id="busy-more" hidden></button>
+    </section>
+
     <section class="card help">
       <h2>How to read this</h2>
       <details open>
         <summary>The numbers</summary>
         <ul>
-          <li><b>Buy at</b>: the average price you'd pay for the amount we suggest, walking up from the cheapest listing.</li>
-          <li><b>Sell at</b>: the cautious selling price. It's the cheapest current listing on the other house, or its 7-day typical price if that's lower.</li>
-          <li><b>You get back</b>: the sell price minus the auction cut, <b>5%</b> on your faction's house and <b>15%</b> on Blackwater.</li>
-          <li><b>Return (×)</b>: what you get back divided by what you pay. ×2 means you double your gold. <b>Solid</b> is ×2 or more; <b>Fair</b> is ×1.15 to ×2.</li>
-          <li><b>Sells a day</b>: how many units we saw sell on the house you'd sell on, averaged over up to 7 days.</li>
-          <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market.</li>
-          <li><b>Profit a day</b>: your share × the profit on each item.</li>
-          <li><b>Days of stock</b>: how many days the items already listed would take to sell. Lower is better.</li>
+          <li><b>Buy</b>: the average price you'd pay for the amount we suggest, walking up from the cheapest listing.</li>
+          <li><b>Sell</b>, selling at home: the cheapest current listing in your faction's house, or its 7-day typical price if that's lower.</li>
+          <li><b>Sell</b>, selling on Blackwater: <b>half the other faction's price</b>. Almost nobody buys on Blackwater to use the item; your buyers are traders from the other faction who resell it in their own house, and they need a profit too. If someone already sells the item on Blackwater for less than that, you can only match the cheapest Blackwater listing. Blackwater's own asking prices are otherwise ignored, because they are often far too high.</li>
+          <li><b>Back per 1g</b>: what you get back for each gold you spend, after the cut (<b>5%</b> on your faction's house, <b>15%</b> on Blackwater). ×2 means you double your gold. <b>Solid</b> is ×2 or more; <b>Fair</b> is ×1.15 to ×2.</li>
+          <li><b>Sold a day</b>: how many units we saw sell where your buyers are, averaged over up to 7 days: your own faction's house when you sell at home, the other faction's house when you sell on Blackwater.</li>
+          <li><b>Market a day</b>: sold a day × the price, so how much gold changes hands for that item each day.</li>
+          <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market. <b>Profit a day</b> is your share × the profit on each item.</li>
+          <li><b>Busiest on Blackwater</b>: the items with the most gold changing hands each day on the neutral house, with today's Alliance and Horde prices next to them.</li>
         </ul>
       </details>
       <details>
         <summary>Where the data comes from</summary>
-        <p>Every hour a free GitHub job reads the EU PvP Alliance, Horde and Blackwater auction houses from Blizzard's official Battle.net API. The API only shows what's listed, not what sold. We work out sales by comparing each snapshot with the one an hour earlier. A listing that disappears with 2+ hours left counts as sold, unless it looks like a cancel-and-relist or a cheaper listing of the same item is still there. Some cancellations will still slip through, so treat "sells a day" as an estimate.</p>
+        <p>Every hour a free GitHub job reads the EU PvP Alliance, Horde and Blackwater auction houses from Blizzard's official Battle.net API. The API only shows what's listed, not what sold. We work out sales by comparing each snapshot with the one an hour earlier. A listing that disappears with 2+ hours left counts as sold, unless it looks like a cancel-and-relist or a cheaper listing of the same item is still there. Some cancellations will still slip through, so treat "sold a day" as an estimate. The first figures appear after one hourly comparison and settle over a day or two.</p>
         <p>Not included: auction deposits (you lose them if an item doesn't sell, and Blackwater's are higher), and travel or mail time. Purchases on Blackwater arrive by mail.</p>
       </details>
       <details>
@@ -111,7 +179,7 @@
   </main>
 
   <footer>
-    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. Not affiliated with or endorsed by Blizzard Entertainment.</p>
+    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. A fan-made tool, not affiliated with or endorsed by Blizzard Entertainment.</p>
   </footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>

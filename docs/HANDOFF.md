@@ -381,3 +381,31 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   count. No keep-alive was added: GitHub disabled the best-known keep-alive action's repository for
   breaking its terms. GitHub warns before pausing; re-enable from the Actions tab with one click, or
   any commit to `main` resets the clock.
+
+## 13. Changes after launch (13 Nov 2026, from the owner's feedback)
+
+- **Home → Blackwater priced off the other faction.** Almost nobody buys on Blackwater to use an item:
+  the buyers are the other faction's traders, who resell at home. So the selling price is half the other
+  faction's (cautious) price, or the cheapest Blackwater listing if that is lower (competition).
+  Blackwater's own asks above that are ignored. Volume and "your share" come from the other faction's
+  sales. Owner's rule: any quantity cap comes from Alliance/Horde, never from Blackwater.
+- **No top-80 cut.** The warming list was cut to 80 by profit per item, which hid cheap, high-return lines
+  such as Recipe: Elixir of Giant Growth (Horde 3s20c, Alliance 78s89c, Blackwater 50s at 16:25 UTC).
+  Every qualifying item is listed now (164–314 per view on the first live data).
+- **Earlier sales figures.** Sorting by market size silently fell back to profit per item while warming.
+  Sales estimates now start after the first hourly diff (marked early); warming only means "no volume
+  filter yet". Sort options that still lack data are disabled with a note.
+- **New sections, modelled on the owner's cross-faction PDF:** a real ranked table (buy, sell, back per
+  1g and market a day shaded, sold a day, bar), the return-vs-market chart (log axes in gold, ×2/×10
+  guides, labels, hover/tap tooltip, dot size by profit a day, ring for shopping-list items), the ten
+  biggest markets and ten biggest returns, and **Busiest on Blackwater** with a cross-faction route.
+  On the first hour of live data, only about 12% of Blackwater's gold volume had a clear route
+  (e.g. Recipe: Savory Whimsyfin Delight and Shellfish, A → H); most of the rest is bought for use.
+- **World of Warcraft look**: dark leather and gold trim (parchment in light mode), Cinzel headings,
+  quality colours, gold/silver/copper coin colours, Alliance/Horde switch colours, in-game style tooltip.
+  No Blizzard art or logos.
+- **Scan coverage checked**: each run reads every listing (about 240k Alliance, 278k Horde, 36k
+  Blackwater; ~6,200 items per faction house); all items from the PDF were present. AHledger was not
+  adopted: it lacks Blackwater, and its terms forbid keeping or republishing its data.
+- Listing ids are stable between snapshots (~80% of listings keep their id an hour later), so the sales
+  diff is sound; cancellations still leak in, as documented.

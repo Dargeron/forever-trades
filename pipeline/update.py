@@ -28,7 +28,8 @@ TL_SAFE_SHORT_GAP = {'LONG', 'VERY_LONG'}      # can't expire within ~2 h
 TL_SAFE_LONG_GAP = {'VERY_LONG'}               # can't expire within 12 h
 HISTORY_DAYS = 14
 WINDOW_DAYS = 7
-MIN_SALES_HOURS = 6                            # below this, sold/day is shown as "collecting"
+MIN_SALES_HOURS = 6                            # below this: "warming", every price gap is listed, no volume filter
+EARLY_SALES_HOURS = 1                          # sales estimates are shown (flagged early) from the first hourly diff
 
 
 # --------------------------------------------------------------------------- API
@@ -269,13 +270,14 @@ def update_history(hist, house, stats, sold, snap_dt, gap_hours):
 
 
 def item_history(hist, house, item, now_dt):
-    """sold_per_day (or None while collecting), typical price over 7 days, hours of data."""
+    """sold_per_day (None before the first hour of diffs; early until MIN_SALES_HOURS),
+    typical price over 7 days, hours of data."""
     h = hist.get(house) or {}
     cutoff = day_of(now_dt - timedelta(days=WINDOW_DAYS))
     hours = sum(v for d, v in (h.get('hours') or {}).items() if d > cutoff)
     days = {d: v for d, v in ((h.get('items') or {}).get(str(item)) or {}).items() if d > cutoff}
     units = sum(v[0] for v in days.values())
-    spd = units / hours * 24 if hours >= MIN_SALES_HOURS else None
+    spd = units / hours * 24 if hours >= EARLY_SALES_HOURS else None
     daily = sorted(v[2] / v[3] for v in days.values() if v[3] >= 3)
     typ = daily[len(daily) // 2] if len(daily) >= 2 else None
     return spd, typ, hours
@@ -303,54 +305,131 @@ def walk(ladder, units):
     return (cost / got if got else None), got
 
 
+def gear_skip(info, s):
+    """Random-suffix gear ("of the Bear"): prices of different suffixes are not comparable."""
+    return info[4] or (info[2] in ('Armor', 'Weapon') and s['variants'] > 1)
+
+
+def cautious(d, typ):
+    """The price to plan with on a house: its lowest listing, or its 7-day typical price if
+    that is lower; the typical alone if nothing is listed now; None if neither is known."""
+    if d:
+        return d['low'] if typ is None else min(d['low'], typ)
+    return typ
+
+
+def trend_of(d, typ):
+    if typ and d:
+        return 'falling' if d['low'] < 0.6 * typ else ('rising' if d['low'] > 1.5 * typ else None)
+    return None
+
+
+def plan(s, back, spd, warming):
+    """How many to buy a day, and at what average price, given what one unit brings back
+    (`back`) and how many sell a day where the buyers are (`spd`). None unless it clears
+    x1.15 and (once out of warming) 3s a day. While warming, items with no sales seen yet
+    stay listed as price gaps. Returns (units, avg, mult, profit_each, profit_day, ladder)."""
+    if spd is None or (warming and spd < 0.5):
+        units, avg = None, s['low']
+    else:
+        if spd < 0.5:
+            return None
+        units = min(0.25 * spd, s['qty'])
+        avg, _ = walk(s['ladder'], max(1, math.ceil(units)))
+        if not avg:
+            return None
+    mult = back / avg
+    if mult < 1.15:
+        return None
+    profit_each = back - avg
+    profit_day = units * profit_each if units is not None else None
+    if not warming and profit_day is not None and profit_day < 300:
+        return None
+    need = math.ceil(units * 2) if units else 5
+    ladder, acc = [], 0
+    for p, q in s['ladder']:
+        ladder.append([p, q]); acc += q
+        if acc >= need or len(ladder) >= 12:
+            break
+    return units, avg, mult, profit_each, profit_day, ladder
+
+
+def finish(out, warming):
+    """Every qualifying item, never a silent top-N: by profit a day, then profit per item."""
+    out.sort(key=lambda o: (-(o['profitDay'] or 0), -o['profitEach']))
+    return out
+
+
+def busiest(hist, house, data, now_dt, names_cache):
+    """Items with the most gold changing hands a day on `house`: estimated units sold a day
+    and the copper they sold for, over up to 7 days. Every item seen selling 0.5+ a day."""
+    h = hist.get(house) or {}
+    cutoff = day_of(now_dt - timedelta(days=WINDOW_DAYS))
+    hours = sum(v for d, v in (h.get('hours') or {}).items() if d > cutoff)
+    out = []
+    if hours < EARLY_SALES_HOURS:
+        return out, hours
+    S = data[house]['stats']
+    A, Hd = data['alliance']['stats'], data['horde']['stats']
+    for item, days in (h.get('items') or {}).items():
+        units = sum(v[0] for d, v in days.items() if d > cutoff)
+        copper = sum(v[1] for d, v in days.items() if d > cutoff)
+        spd = units / hours * 24
+        if units <= 0 or spd < 0.5:
+            continue
+        i = int(item)
+        info = item_info(i, names_cache)
+        s, a, hh = S.get(i), A.get(i), Hd.get(i)
+        avg = copper / units
+        a_low, h_low = (a['low'] if a else None), (hh['low'] if hh else None)
+        out.append(dict(id=i, name=info[0], q=info[1], cls=info[2], soldDay=round(spd, 2),
+                        avg=int(round(avg)), marketDay=int(round(copper / hours * 24)),
+                        low=s['low'] if s else None, qty=s['qty'] if s else 0,
+                        aLow=a_low, hLow=h_low, route=route_of(avg, a_low, h_low)))
+    out.sort(key=lambda o: -o['marketDay'])
+    return out, hours
+
+
+def route_of(bw, a, h, faction_cut=None, neutral_cut=None):
+    """Who is making money when this item sells on Blackwater at `bw`? 'A>H' if an Alliance
+    seller beats the Alliance price after Blackwater's cut AND a Horde buyer can still resell
+    it in the Horde house at a profit after that house's cut; 'H>A' the other way round; None
+    if neither holds (then it is mostly bought for use, or the estimate is noise)."""
+    fc = CONFIG['cuts']['faction'] if faction_cut is None else faction_cut
+    nc = CONFIG['cuts']['neutral'] if neutral_cut is None else neutral_cut
+    if not a or not h or not bw:
+        return None
+    if bw * (1 - nc) > a and h * (1 - fc) > bw:
+        return 'A>H'
+    if bw * (1 - nc) > h and a * (1 - fc) > bw:
+        return 'H>A'
+    return None
+
+
 def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_cache):
+    """Buy on `src`, sell on `dst` at its cautious price (used for Blackwater -> home)."""
     S, D = src['stats'], dst['stats']
     out = []
     dst_hours = item_history(hist, dst_house, -1, now_dt)[2]
     warming = dst_hours < MIN_SALES_HOURS
     for item, s in S.items():
         info = item_info(item, names_cache)
-        if info[4] or (info[2] in ('Armor', 'Weapon') and s['variants'] > 1):
-            continue                                   # random-suffix gear: prices not comparable
+        if gear_skip(info, s):
+            continue
         d = D.get(item)
         spd, typ, _ = item_history(hist, dst_house, item, now_dt)
-        if d:
-            sell = d['low'] if typ is None else min(d['low'], typ)
-            dst_qty = d['qty']
-        elif typ:
-            sell, dst_qty = typ, 0
-        else:
+        sell = cautious(d, typ)
+        if not sell:
             continue
         back = sell * (1 - dst_cut)
         if back <= s['low'] * 1.15:
             continue
-        if warming or spd is None:
-            units = None
-            avg, got = s['low'], min(s['qty'], 1)
-        else:
-            if spd < 0.5:
-                continue
-            units = min(0.25 * spd, s['qty'])
-            avg, got = walk(s['ladder'], max(1, math.ceil(units)))
-            if not avg:
-                continue
-        mult = back / avg
-        if mult < 1.15:
+        p = plan(s, back, spd, warming)
+        if not p:
             continue
-        profit_each = back - avg
-        profit_day = units * profit_each if units is not None else None
-        if profit_day is not None and profit_day < 300:
-            continue
+        units, avg, mult, profit_each, profit_day, ladder = p
         typ_src = item_history(hist, src_house, item, now_dt)[1]
-        trend = None
-        if typ and d:
-            trend = 'falling' if d['low'] < 0.6 * typ else ('rising' if d['low'] > 1.5 * typ else None)
-        need = math.ceil(units * 2) if units else 5
-        ladder, acc = [], 0
-        for p, q in s['ladder']:
-            ladder.append([p, q]); acc += q
-            if acc >= need or len(ladder) >= 12:
-                break
+        dst_qty = d['qty'] if d else 0
         out.append(dict(
             id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
             buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
@@ -361,13 +440,61 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
             profitDay=int(round(profit_day)) if profit_day is not None else None,
             marketDay=int(round(spd * sell)) if spd else None,
             daysStock=round(dst_qty / spd, 1) if spd else None,
-            tag='Solid' if mult >= 2 else 'Fair', trend=trend, ladder=ladder))
-    if warming:
-        out.sort(key=lambda o: -o['profitEach'])
-        out = out[:80]
-    else:
-        out.sort(key=lambda o: -(o['profitDay'] or 0))
-    return out, warming, dst_hours
+            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(d, typ), ladder=ladder))
+    return finish(out, warming), warming, dst_hours
+
+
+def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_dt, names_cache):
+    """Buy at home, sell on Blackwater to the other faction's traders.
+
+    Almost nobody buys on Blackwater to use the item: the buyers are traders of the other
+    faction, who resell it in their own house. So Blackwater's asking prices (often stale and
+    far too high) are never the reference; the other faction's price is. We list at `share`
+    (half) of it, so their traders still make a profit, whether or not the item is listed on
+    Blackwater. If someone already sells it on Blackwater for less than that, it is
+    competition, and we can only match the cheapest Blackwater listing. Sales volume comes
+    from the other faction's house, where the real demand is."""
+    H, N, O = home['stats'], neu['stats'], other['stats']
+    out = []
+    hours = item_history(hist, other_key, -1, now_dt)[2]
+    warming = hours < MIN_SALES_HOURS
+    for item, s in H.items():
+        info = item_info(item, names_cache)
+        if gear_skip(info, s):
+            continue
+        o = O.get(item)
+        spd, typ, _ = item_history(hist, other_key, item, now_dt)
+        ref = cautious(o, typ)
+        if not ref:
+            continue
+        half = ref * share
+        n = N.get(item)
+        undercut = bool(n and n['low'] < half)
+        sell = n['low'] if undercut else half
+        back = sell * (1 - cut)
+        if back <= s['low'] * 1.15:
+            continue
+        p = plan(s, back, spd, warming)
+        if not p:
+            continue
+        units, avg, mult, profit_each, profit_day, ladder = p
+        typ_src = item_history(hist, home_key, item, now_dt)[1]
+        o_qty = o['qty'] if o else 0
+        out.append(dict(
+            id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
+            buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
+            ref=int(round(ref)), refLow=o['low'] if o else None, refTyp=int(typ) if typ else None, refQty=o_qty,
+            half=int(round(half)), undercut=undercut,
+            sell=int(round(sell)), back=int(round(back)),
+            dstQty=n['qty'] if n else 0, dstLow=n['low'] if n else None, dstTyp=None,
+            soldDay=round(spd, 2) if spd is not None else None,
+            unitsDay=round(units, 2) if units is not None else None,
+            mult=round(mult, 3), profitEach=int(round(profit_each)),
+            profitDay=int(round(profit_day)) if profit_day is not None else None,
+            marketDay=int(round(spd * ref)) if spd else None,
+            daysStock=round(o_qty / spd, 1) if spd else None,
+            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(o, typ), ladder=ladder))
+    return finish(out, warming), warming, hours
 
 
 # --------------------------------------------------------------------------- commands
@@ -556,12 +683,18 @@ def cmd_run(api, args):
         _, _, hours = item_history(hist, key, -1, now)
         result['houses'][key] = {'snapshot': h['snap'].isoformat(), 'auctions': h['auctions'],
                                  'items': len(h['stats']), 'salesHours': round(hours, 1)}
+    share = CONFIG.get('other_faction_share', 0.5)
     for fac in ('alliance', 'horde'):
+        other = 'horde' if fac == 'alliance' else 'alliance'
         home_in, w1, h1 = opportunities(data['neutral'], data[fac], 'neutral', fac, cuts['faction'], hist, now, names_cache)
-        to_neu, w2, h2 = opportunities(data[fac], data['neutral'], fac, 'neutral', cuts['neutral'], hist, now, names_cache)
+        to_neu, w2, h2 = to_blackwater(data[fac], data['neutral'], data[other], fac, other, cuts['neutral'], share,
+                                       hist, now, names_cache)
         result['factions'][fac] = {
             'buyNeutralSellHome': {'warming': w1, 'salesHours': round(h1, 1), 'items': home_in},
-            'buyHomeSellNeutral': {'warming': w2, 'salesHours': round(h2, 1), 'items': to_neu}}
+            'buyHomeSellNeutral': {'warming': w2, 'salesHours': round(h2, 1), 'refFaction': other, 'share': share,
+                                   'items': to_neu}}
+    top, top_hours = busiest(hist, 'neutral', data, now, names_cache)
+    result['neutralTop'] = {'salesHours': round(top_hours, 1), 'items': top}
     os.makedirs(args.out, exist_ok=True)
     jsave(os.path.join(args.out, 'latest.json'), result)
     meta = {'updated': now.isoformat(), 'house_ids': houses, 'house_match': meta_prev.get('house_match'),

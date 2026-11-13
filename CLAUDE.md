@@ -13,7 +13,9 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   deliberately not in the repo: the earlier one was a stored AHledger sample (their terms forbid keeping data), and
   it could not separate PvP from its look-alike group anyway. Re-verify ids with fresh in-game prices instead.
 - `pipeline/items.json`: item id → [name, quality, class, subclass, randomSuffixGear]. Rebuild with `tools/build_items.py`.
-- `site/`: `index.html`, `style.css`, `app.js` (vanilla JS, no dependencies). Reads `site/data/latest.json`.
+- `site/`: `index.html`, `style.css`, `app.js` (vanilla JS, no dependencies; Cinzel from Google Fonts). Reads
+  `site/data/latest.json`. WoW look: dark leather/gold (parchment in light mode), quality-coloured names, coin colours.
+  Sections: ranked table, return-vs-market chart, ten biggest markets/returns, shopping list, busiest on Blackwater.
 - `.github/workflows/update.yml`: hourly at :17, plus push to main, plus manual. Restores and saves history on the
   `state` branch (force-pushed single commit), deploys Pages via artifact. `probe.yml`: manual house listing.
 - `tools/selftest.py`: 9 simulated hours, offline. Run after any pipeline change.
@@ -43,7 +45,14 @@ python3 -m http.server -d site 8000
   `item.modifiers` (type 28) as a gear variant: it differs per listing. API shows listings only, never sales.
 - Cuts: 5% on faction houses, 15% on Blackwater. Blackwater is shared by Booty Bay, Gadgetzan and Everlook; purchases arrive by mail.
 - Sales are inferred by diffing hourly snapshots (see `diff_sales`). Cancellations can leak in, so treat as estimates.
-- Thresholds: show if return ≥ ×1.15 and profit ≥ 3s a day; "your share" = 25% of estimated daily sales; Solid ≥ ×2.
+- Thresholds: show if return ≥ ×1.15 and (after warming) profit ≥ 3s a day; "your share" = 25% of estimated daily
+  sales where the buyers are; Solid ≥ ×2. Never cut a list to a top N (the owner missed items that way).
+- **Home → Blackwater** (`to_blackwater`): sell = min(½ × other faction's cautious price, cheapest Blackwater listing);
+  volume and "your share" come from the other faction's sales. Blackwater asks above that are ignored. Owner's rule:
+  quantity caps come from Alliance/Horde sales, never Blackwater's. The ½ is `other_faction_share` in config.json.
+- Sales estimates start after the first hourly diff (`EARLY_SALES_HOURS` = 1, flagged early on the site); below
+  `MIN_SALES_HOURS` = 6 ("warming") every price gap is listed without a volume filter.
+- `neutralTop` (`busiest`): every item selling 0.5+/day on Blackwater by gold a day, with `route_of` = A>H / H>A / None.
 - Money display: g/s/c; coppers only under 10s; 10s and up rounded to silver; 100g+ shows gold only.
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 

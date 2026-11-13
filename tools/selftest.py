@@ -29,6 +29,8 @@ def market():
             114: dict(price=base * random.uniform(0.8, 1.25), spd=spd, qty=int(spd * random.uniform(1, 6)) + 1),
             125: dict(price=base * random.uniform(0.4, 2.5), spd=spd * 0.1, qty=int(spd * random.uniform(0.2, 2)) + 1),
         }
+        if random.random() < 0.15:          # a big gap between the two factions, as on the live servers
+            m[i][random.choice([113, 114])]['price'] *= random.uniform(2.5, 6)
     return m, set(gear)
 
 
@@ -100,6 +102,20 @@ def main():
             o = v['items'][0]
             assert o['mult'] >= 1.15 and o['profitDay'] > 0 and o['back'] > o['buy'], o
             assert all(a['profitDay'] >= b['profitDay'] for a, b in zip(v['items'], v['items'][1:]))
+        # home -> Blackwater: sell = min(half the other faction's price, cheapest Blackwater listing)
+        v = out['factions'][fac]['buyHomeSellNeutral']
+        assert v['refFaction'] == ('horde' if fac == 'alliance' else 'alliance') and v['share'] == 0.5, v.keys()
+        for o in v['items']:
+            assert abs(o['half'] - o['ref'] * 0.5) <= 1, o
+            assert o['sell'] <= o['half'] + 1 and (o['dstLow'] is None or o['sell'] <= o['dstLow']), o
+            assert (o['sell'] == o['dstLow']) if o['undercut'] else abs(o['sell'] - o['half']) <= 1, o
+            assert abs(o['back'] - o['sell'] * 0.85) <= 1, o
+        print(fac, 'home->Blackwater:', len(v['items']), 'items,', sum(o['undercut'] for o in v['items']),
+              'matching a cheaper Blackwater listing,', sum(o['dstLow'] is None for o in v['items']), 'not on Blackwater')
+    top = out['neutralTop']['items']
+    assert top and all(a['marketDay'] >= b['marketDay'] for a, b in zip(top, top[1:])), 'neutralTop'
+    assert all(o['soldDay'] >= 0.5 and o['avg'] > 0 for o in top), 'neutralTop values'
+    print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')
     print('selftest OK ->', os.path.join(TMP, 'out', 'latest.json'))
 
 

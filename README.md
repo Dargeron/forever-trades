@@ -5,10 +5,14 @@ A small website for **WoW: Forever, EU PvP** that shows, for Alliance or Horde:
 - **Buy on Blackwater → sell at home**: items that are cheaper on the neutral
   (Blackwater) auction house than they sell for in your faction's house, after
   the 5% cut.
-- **Buy at home → sell on Blackwater**: the reverse, after Blackwater's 15% cut.
+- **Buy at home → sell on Blackwater**: items that are cheap at home and dear in
+  the other faction's house, priced for the other faction's traders who buy on
+  Blackwater and resell at home (see Numbers), after Blackwater's 15% cut.
 
-Every opportunity is ranked and named, with a return-vs-market-size chart and a
-shopping list for a chosen budget.
+Every opportunity is ranked and named in a table, with a return-vs-market-size
+chart, the ten biggest markets and returns, a shopping list for a chosen budget,
+and a list of the busiest items on Blackwater (gold changing hands a day, with the
+cross-faction route when there is one).
 
 ## How it updates
 
@@ -61,9 +65,21 @@ Only the Python standard library is used.
 ## Numbers
 
 - **Buy at**: average price for the suggested amount, walking up from the cheapest listing.
-- **Sell at**: the cheaper of the current lowest listing and the 7-day typical price on the house you sell on.
+- **Sell at, selling at home**: the cheaper of the current lowest listing and the 7-day typical price in your house.
+- **Sell at, selling on Blackwater**: half the other faction's price (`other_faction_share` in
+  `pipeline/config.json`), so their traders can still resell at a profit; or the cheapest Blackwater
+  listing if that is lower (competition). Blackwater's own asking prices are otherwise ignored: they are
+  often stale and far too high.
 - **Return (×)**: (sell × (1 − cut)) ÷ buy. Shown when ≥ ×1.15.
-- **Your share**: a quarter of the estimated daily sales, so you don't flood the market.
+- **Sold a day**: estimated where the buyers are: your house (Blackwater → home) or the other faction's
+  house (home → Blackwater). Blackwater's own thin sales never set a quantity.
+- **Your share**: a quarter of that, so you don't flood the market.
+- **Early data**: sales figures appear after the first hourly comparison and are marked early. For the
+  first 6 hours every price gap is listed; after that only items selling at least 0.5 a day. Lists are
+  never cut to a top N.
+- **Busiest on Blackwater**: every item seen selling there, by gold a day (units × the prices they sold
+  at). Route A → H when an Alliance seller beats the Alliance price after the 15% cut and a Horde trader
+  still beats that price after the 5% cut at home (H → A the other way round).
 - Deposits are not included.
 
 ## Credits
