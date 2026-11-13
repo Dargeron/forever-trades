@@ -1,0 +1,83 @@
+name: Update prices
+
+on:
+  schedule:
+    - cron: '17 * * * *'          # every hour, at :17 (quieter than :00 on GitHub)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild the site even if Blizzard has no new snapshot
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths: ['site/**', 'pipeline/**', '.github/workflows/update.yml']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-prices
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      changed: ${{ steps.run.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore saved history
+        run: |
+          mkdir -p state
+          if git ls-remote --exit-code --heads origin state >/dev/null 2>&1; then
+            git fetch -q --depth 1 origin state
+            git --work-tree=state checkout FETCH_HEAD -- .
+            git reset -q
+          fi
+          ls -la state
+
+      - name: Read Blizzard's auction houses and rebuild
+        id: run
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+          FORCE: ${{ github.event_name == 'push' || inputs.force == true }}
+        run: |
+          if [ "$FORCE" = "true" ]; then F=--force; else F=; fi
+          python3 pipeline/update.py run --state state --out site/data $F
+
+      - name: Save history
+        if: steps.run.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd state
+          rm -rf .git
+          git init -q -b state
+          git config user.name "forever-trades-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "history $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" state
+
+      - name: Package the site
+        if: steps.run.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

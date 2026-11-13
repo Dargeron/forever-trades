@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forever Trades</title>
+<meta name="description" content="What to buy on the WoW: Forever neutral auction house and sell at home (and the reverse), EU PvP, updated hourly from Blizzard's API.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23eda100'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' font-family='sans-serif' font-weight='700' fill='%23111'%3Eg%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="title-row">
+      <h1>Forever Trades</h1>
+      <span class="realm-chip">EU · PvP</span>
+    </div>
+    <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater. Prices come from Blizzard every hour.</p>
+    <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
+  </header>
+
+  <nav class="controls" aria-label="Choose your side and trade direction">
+    <div class="seg faction" role="radiogroup" aria-label="Your faction">
+      <button type="button" role="radio" data-faction="alliance" class="seg-btn">Alliance</button>
+      <button type="button" role="radio" data-faction="horde" class="seg-btn">Horde</button>
+    </div>
+    <div class="seg dir" role="radiogroup" aria-label="Trade direction">
+      <button type="button" role="radio" data-dir="buyNeutralSellHome" class="seg-btn wide"><span class="dir-a">Buy on Blackwater</span><span class="arrow" aria-hidden="true">→</span><span class="dir-b home-name">sell at home</span></button>
+      <button type="button" role="radio" data-dir="buyHomeSellNeutral" class="seg-btn wide"><span class="dir-a home-name-buy">Buy at home</span><span class="arrow" aria-hidden="true">→</span><span class="dir-b">sell on Blackwater</span></button>
+    </div>
+  </nav>
+
+  <main>
+    <p class="explain" id="explain"></p>
+    <div class="banner" id="banner" hidden></div>
+
+    <section class="tiles" id="tiles" aria-label="Summary"></section>
+
+    <section class="card" id="rank-card">
+      <div class="card-head">
+        <div>
+          <h2 id="rank-title">Every opportunity</h2>
+          <p class="sub" id="rank-sub"></p>
+        </div>
+        <label class="sort">Rank by
+          <select id="sort">
+            <option value="profitDay">Profit a day</option>
+            <option value="mult">Return (×)</option>
+            <option value="marketDay">Market size a day</option>
+            <option value="profitEach">Profit per item</option>
+          </select>
+        </label>
+      </div>
+      <div class="search-row"><input id="search" type="search" placeholder="Find an item…" aria-label="Find an item"></div>
+      <ol class="bars" id="bars"></ol>
+      <button type="button" class="more" id="more" hidden></button>
+    </section>
+
+    <section class="card" id="scatter-card">
+      <h2>Return vs market size</h2>
+      <p class="sub">Each dot is an item. Up means a bigger return on what you pay; right means more gold changes hands each day. Top-right is best. Tap a dot for details.</p>
+      <div class="scatter-wrap" id="scatter-wrap">
+        <svg id="scatter" role="img" aria-label="Scatter chart of return against market size"></svg>
+      </div>
+    </section>
+
+    <section class="card" id="basket-card">
+      <div class="card-head">
+        <div>
+          <h2>Shopping list</h2>
+          <p class="sub">The best mix of items for your budget, buying only what should sell within a day.</p>
+        </div>
+        <label class="sort">Budget
+          <select id="budget">
+            <option value="50000">5 gold</option>
+            <option value="100000" selected>10 gold</option>
+            <option value="200000">20 gold</option>
+            <option value="500000">50 gold</option>
+            <option value="1000000">100 gold</option>
+          </select>
+        </label>
+      </div>
+      <div id="basket"></div>
+    </section>
+
+    <section class="card help">
+      <h2>How to read this</h2>
+      <details open>
+        <summary>The numbers</summary>
+        <ul>
+          <li><b>Buy at</b>: the average price you'd pay for the amount we suggest, walking up from the cheapest listing.</li>
+          <li><b>Sell at</b>: the cautious selling price. It's the cheapest current listing on the other house, or its 7-day typical price if that's lower.</li>
+          <li><b>You get back</b>: the sell price minus the auction cut, <b>5%</b> on your faction's house and <b>15%</b> on Blackwater.</li>
+          <li><b>Return (×)</b>: what you get back divided by what you pay. ×2 means you double your gold. <b>Solid</b> is ×2 or more; <b>Fair</b> is ×1.15 to ×2.</li>
+          <li><b>Sells a day</b>: how many units we saw sell on the house you'd sell on, averaged over up to 7 days.</li>
+          <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market.</li>
+          <li><b>Profit a day</b>: your share × the profit on each item.</li>
+          <li><b>Days of stock</b>: how many days the items already listed would take to sell. Lower is better.</li>
+        </ul>
+      </details>
+      <details>
+        <summary>Where the data comes from</summary>
+        <p>Every hour a free GitHub job reads the EU PvP Alliance, Horde and Blackwater auction houses from Blizzard's official Battle.net API. The API only shows what's listed, not what sold. We work out sales by comparing each snapshot with the one an hour earlier. A listing that disappears with 2+ hours left counts as sold, unless it looks like a cancel-and-relist or a cheaper listing of the same item is still there. Some cancellations will still slip through, so treat "sells a day" as an estimate.</p>
+        <p>Not included: auction deposits (you lose them if an item doesn't sell, and Blackwater's are higher), and travel or mail time. Purchases on Blackwater arrive by mail.</p>
+      </details>
+      <details>
+        <summary>Safety</summary>
+        <p>Trade goods, not gold. Blizzard's rules forbid moving gold between factions, so buy and sell items on the auction houses, and click every purchase yourself.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. Not affiliated with or endorsed by Blizzard Entertainment.</p>
+  </footer>
+</div>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

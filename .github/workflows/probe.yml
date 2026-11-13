@@ -1,0 +1,26 @@
+name: Probe auction houses
+
+# Manual helper: lists every WoW Forever auction house in the region with a
+# price fingerprint, so the EU PvP Alliance / Horde / Blackwater houses can be
+# picked for pipeline/config.json. Prints no secrets.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Probe
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+        run: python3 pipeline/update.py probe --out-file probe.json && cat probe.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe
+          path: probe.json

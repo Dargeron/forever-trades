@@ -1,0 +1,14 @@
+{
+  "region": "eu",
+  "ruleset": 1,
+  "ruleset_name": "PvP",
+  "houses": {
+    "alliance": 110,
+    "horde": 113,
+    "neutral": 116
+  },
+  "cuts": {
+    "faction": 0.05,
+    "neutral": 0.15
+  }
+}
