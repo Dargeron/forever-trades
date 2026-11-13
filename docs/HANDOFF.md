@@ -150,7 +150,7 @@ What that became:
 ## 5. Architecture
 
 ```
-GitHub Actions (hourly :17, push to main, manual)
+GitHub Actions (hourly :38 since 13 Nov evening, push to main, manual)
   └─ build job
       ├─ restore state/ from branch `state` (if it exists)
       ├─ python3 pipeline/update.py run --state state --out site/data [--force]
@@ -426,3 +426,7 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   adopted: it lacks Blackwater, and its terms forbid keeping or republishing its data.
 - Listing ids are stable between snapshots (~80% of listings keep their id an hour later), so the sales
   diff is sound; cancellations still leak in, as documented.
+- **Hourly schedule moved from :17 to :38** (13 Nov, ~19:40 UTC). GitHub had not fired a single scheduled
+  run in four slots (16:17–19:17) although the workflow was active and every push/manual run succeeded;
+  changing the cron is the usual way to make GitHub register a schedule afresh. :38 also suits Blizzard,
+  whose snapshots are stamped about :25, so a :17 run always fetched the previous hour's snapshot.

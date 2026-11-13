@@ -16,7 +16,7 @@ Full background, decisions and history: `docs/HANDOFF.md`.
 - `site/`: `index.html`, `style.css`, `app.js` (vanilla JS, no dependencies; Cinzel from Google Fonts). Reads
   `site/data/latest.json`. WoW look: dark leather/gold (parchment in light mode), quality-coloured names, coin colours.
   Sections: ranked table, return-vs-market chart, ten biggest markets/returns, shopping list, busiest on Blackwater.
-- `.github/workflows/update.yml`: hourly at :17, plus push to main, plus manual. Restores and saves history on the
+- `.github/workflows/update.yml`: hourly at :38 (Blizzard snapshots are stamped ~:25), plus push to main, plus manual. Restores and saves history on the
   `state` branch (force-pushed single commit), deploys Pages via artifact. `probe.yml`: manual house listing.
 - `tools/selftest.py`: 9 simulated hours, offline. Run after any pipeline change.
 

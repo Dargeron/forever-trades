@@ -2,7 +2,8 @@ name: Update prices
 
 on:
   schedule:
-    - cron: '17 * * * *'          # every hour, at :17 (quieter than :00 on GitHub)
+    - cron: '38 * * * *'          # every hour at :38: Blizzard's snapshot is stamped about :25, so this takes the
+                                  # newest one (:17 always got the one from 50 minutes earlier); also quieter than :00
   workflow_dispatch:
     inputs:
       force:
