@@ -430,3 +430,9 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   run in four slots (16:17–19:17) although the workflow was active and every push/manual run succeeded;
   changing the cron is the usual way to make GitHub register a schedule afresh. :38 also suits Blizzard,
   whose snapshots are stamped about :25, so a :17 run always fetched the previous hour's snapshot.
+- **Then three checks an hour (:08, :28, :48).** Blizzard's snapshot stamped 19:25 was still not served at
+  19:42 (the previous two appeared ~16 minutes after their stamp), so one fixed minute can miss it by an
+  hour. Checks with nothing new stop in seconds, so frequent checks cost almost nothing and keep the site
+  within ~20 minutes of each new snapshot.
+- **Sold a day / Market a day name their house** in the headings, drop-down, tooltip and top-ten tables,
+  e.g. "Sold a day (Horde AH)": always the faction house where the buyers are, never Blackwater.

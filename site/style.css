@@ -181,7 +181,7 @@ th.c-rank { text-align: right; }
 .flag.warn::before { content: "▼ "; color: var(--warn); }
 .flag.up::before { content: "▲ "; color: var(--good); }
 .only-s, .only-m, .only-t, .only-l { display: none; }
-.busy th, .grid.busy th.num { white-space: normal; }
+.grid th, .grid th.num { white-space: normal; }   /* headings wrap; e.g. 'Market a day (Alliance AH)' */
 .rank tr.row { cursor: pointer; }
 .rank tr.row:hover td, .rank tr.row[aria-expanded="true"] td { background-color: var(--hover); }
 td.ret { font-weight: 750; background: rgb(var(--ret-rgb) / var(--a, 0)); }

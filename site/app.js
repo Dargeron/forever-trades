@@ -98,6 +98,9 @@
     return (f && f[S.dir]) || { items: [], warming: true, salesHours: 0 };
   }
   const toBW = () => S.dir === 'buyHomeSellNeutral';
+  // Where "sold a day" and "market a day" are counted: the faction house where your buyers are (never Blackwater).
+  const buyersAH = () => (toBW() ? OTHER[S.faction] : FAC[S.faction]) + ' AH';
+  const PER_HOUSE = { soldDay: 1, marketDay: 1 };
   function hasKey(v, key) { return !!ALWAYS[key] || v.items.some((o) => o[key] > 0); }
 
   // ---------- render
@@ -209,7 +212,7 @@
     Array.prototype.forEach.call($('sort').options, (op) => {
       const ok = hasKey(v, op.value);
       op.disabled = !ok;
-      op.textContent = SORTS[op.value] + (ok ? '' : ' (after the first hourly update)');
+      op.textContent = SORTS[op.value] + (PER_HOUSE[op.value] ? ' (' + buyersAH() + ')' : '') + (ok ? '' : ' (after the first hourly update)');
     });
   }
 
@@ -239,9 +242,13 @@
     thb.dataset.sort = barKey;
     thb.querySelector('.th-label').textContent = barKey === 'profitEach' ? 'Profit per item' : 'Profit a day';
     markHeaders($('rank-card'), key, dir);
+    ['soldDay', 'marketDay'].forEach((k) => {
+      const lab = document.querySelector('#rank-card th[data-sort="' + k + '"] .th-label');
+      if (lab) lab.textContent = SORTS[k] + ' (' + buyersAH() + ')';
+    });
     $('rank-title').textContent = v.items.length ? 'All ' + v.items.length + ' opportunities' : 'Opportunities';
     const order = key === 'name' ? (dir === 'asc' ? 'A to Z' : 'Z to A') : (dir === 'asc' ? 'lowest first' : 'highest first');
-    $('rank-sub').textContent = 'Sorted by ' + KEY_LABEL[key] + ', ' + order + '. Tap a column heading to sort by it (again to flip), or a row for the details. Shading: darker means a bigger return or a bigger market.';
+    $('rank-sub').textContent = 'Sorted by ' + KEY_LABEL[key] + (PER_HOUSE[key] ? ' in the ' + buyersAH() : '') + ', ' + order + '. Tap a column heading to sort by it (again to flip), or a row for the details. Shading: darker means a bigger return or a bigger market.';
     const tb = $('rank-body'); tb.textContent = '';
     if (!list.length) {
       const tr = el('tr'), td = el('td', 'empty', S.query ? 'No item matches “' + S.query + '”.' : 'No item clears a ×1.15 return right now. Check back after the next update.');
@@ -348,7 +355,7 @@
     tip.append(el('div', 'tn tq' + (o.q === undefined ? 1 : o.q), o.name), el('div', 'tsub', mult(o.mult) + ' back per 1g · ' + o.tag));
     const rows = [['Buy', coins(o.buy)]];
     if (toBW()) rows.push([other + ' price', coins(o.ref)]);
-    rows.push(['Sell', coins(o.sell)], ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'], ['Sold a day', soldTxt(o)], ['Market a day', coins(o.marketDay)]);
+    rows.push(['Sell', coins(o.sell)], ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'], ['Sold a day (' + buyersAH() + ')', soldTxt(o)], ['Market a day (' + buyersAH() + ')', coins(o.marketDay)]);
     rows.forEach(([a, b]) => { const r = el('div', 'tr'), vb = el('span'); vb.append(b); r.append(el('span', null, a), vb); tip.append(r); });
     tip.hidden = false;
     const bb = anchor.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -474,9 +481,9 @@
   function renderTop10(v) {
     const msg = (v.salesHours || 0) < 1 ? 'Needs sales data: after the next hourly update.' : 'Nothing qualifies yet.';
     miniTable('top-markets', v.items.filter((o) => o.mult >= 2 && o.marketDay > 0).sort((a, b) => b.marketDay - a.marketDay).slice(0, 10),
-      [['Item', 'c-item'], ['Market a day', 'num', (o) => coins(o.marketDay)], ['Back per 1g', 'num', (o) => mult(o.mult)]], msg);
+      [['Item', 'c-item'], ['Market a day (' + buyersAH() + ')', 'num', (o) => coins(o.marketDay)], ['Back per 1g', 'num', (o) => mult(o.mult)]], msg);
     miniTable('top-returns', v.items.filter((o) => o.soldDay >= 4).sort((a, b) => b.mult - a.mult).slice(0, 10),
-      [['Item', 'c-item'], ['Back per 1g', 'num', (o) => mult(o.mult)], ['Sold a day', 'num', (o) => num(o.soldDay, 1)]], msg);
+      [['Item', 'c-item'], ['Back per 1g', 'num', (o) => mult(o.mult)], ['Sold a day (' + buyersAH() + ')', 'num', (o) => num(o.soldDay, 1)]], msg);
   }
 
   // ---------- shopping list
