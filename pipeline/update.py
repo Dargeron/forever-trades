@@ -393,10 +393,11 @@ def busiest(hist, house, data, now_dt, names_cache):
             hidden['gold'] += copper / hours * 24
             continue
         info = item_info(i, names_cache)
-        s = S.get(i)
+        s, a, hh = S.get(i), A.get(i), Hd.get(i)
         out.append(dict(id=i, name=info[0], q=info[1], cls=info[2], soldDay=round(spd, 2),
                         avg=int(round(avg)), marketDay=int(round(copper / hours * 24)),
                         low=s['low'] if s else None, qty=s['qty'] if s else 0,
+                        aLow=a['low'] if a else None, hLow=hh['low'] if hh else None,      # cheapest listing now
                         aRef=int(round(a_ref)) if a_ref else None, hRef=int(round(h_ref)) if h_ref else None,
                         xA=round(xa, 3) if xa else None, xH=round(xh, 3) if xh else None,
                         resellX=round(best, 3)))
@@ -675,7 +676,8 @@ def cmd_run(api, args):
         lookup_names(api, missing, names_cache)
     # analysis
     cuts = CONFIG['cuts']
-    result = {'generated': now.isoformat(), 'region': CONFIG['region'].upper(), 'ruleset': CONFIG['ruleset_name'],
+    result = {'generated': now.isoformat(), 'siteVersion': (os.environ.get('GITHUB_SHA') or 'dev')[:12],
+              'region': CONFIG['region'].upper(), 'ruleset': CONFIG['ruleset_name'],
               'houseIds': houses, 'houses': {}, 'factions': {}}
     for key in houses:
         h = data[key]

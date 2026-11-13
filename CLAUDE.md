@@ -59,6 +59,12 @@ python3 -m http.server -d site 8000
 - Site sorting: every column heading with `data-sort` sorts its table (again flips; arrow + `aria-sort`); the
   drop-down mirrors the ranked table. The chart has its own name filter (`#chart-search`, labels every match up to
   30). Dark theme is the default; parchment via the ☀ button (localStorage).
+- **Versioned deploys**: GitHub Pages lets browsers cache the page/JS/CSS for 10 min while `latest.json` is always
+  fetched fresh, so an old script once misread renamed fields (the Blackwater prices showed "–"). `update.yml` stamps
+  `?v=<sha>` into index.html, `VERSION` into app.js, and the pipeline writes `siteVersion` (from GITHUB_SHA) into the
+  data; a page whose VERSION differs reloads once to `?v=<siteVersion>`. Keep the `dev` placeholders in the source.
+- Busiest table shows `low`/`aLow`/`hLow` = cheapest listing now (Blackwater empty when none); the resell ratios use
+  the cautious `aRef`/`hRef`. Check layouts at 320–1440 px: the 9-column table drops columns at 1100/900/760/640.
 - Money display: g/s/c; coppers only under 10s; 10s and up rounded to silver; 100g+ shows gold only.
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 

@@ -9,11 +9,12 @@
   };
   const FAC = { alliance: 'Alliance', horde: 'Horde' };
   const OTHER = { alliance: 'Horde', horde: 'Alliance' };
+  const VERSION = 'dev';   // stamped with the commit at deploy time (see update.yml)
   const PAGE = 40, BUSY_PAGE = 25;
   const SORTS = { profitDay: 'Profit a day', mult: 'Back per 1g (×)', marketDay: 'Market a day', soldDay: 'Sold a day', profitEach: 'Profit per item', buy: 'Buy price', sell: 'Sell price', name: 'Name' };
   const KEY_LABEL = { profitDay: 'profit a day', mult: 'back per 1g', marketDay: 'market a day', soldDay: 'sold a day', profitEach: 'profit per item', buy: 'buy price', sell: 'sell price', name: 'name' };
   const ALWAYS = { mult: 1, profitEach: 1, buy: 1, sell: 1, name: 1 };
-  const BUSY_KEYS = { name: 1, soldDay: 1, avg: 1, marketDay: 1, resellX: 1, low: 1, aRef: 1, hRef: 1 };
+  const BUSY_KEYS = { name: 1, soldDay: 1, avg: 1, marketDay: 1, resellX: 1, low: 1, aLow: 1, hLow: 1 };
   const $ = (id) => document.getElementById(id);
   const NS = 'http://www.w3.org/2000/svg';
 
@@ -78,6 +79,14 @@
       const r = await fetch('data/latest.json?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       S.data = await r.json();
+      // A browser may keep an older copy of this page and script for a while (GitHub Pages caches
+      // them for 10 minutes; apps longer), but the data is always fresh. If the data belongs to a
+      // newer deploy, load the matching page once instead of misreading the new data.
+      const want = S.data.siteVersion;
+      if (want && want !== 'dev' && VERSION !== 'dev' && want !== VERSION && location.search.indexOf('v=' + want) < 0) {
+        location.replace(location.pathname + '?v=' + want + location.hash);
+        return;
+      }
       S.loadedAt = Date.now();
       render();
     } catch (e) {
@@ -543,6 +552,7 @@
     if (h < 1) sub.append('Items people buy on the neutral house that resell at a profit at home. Appears after the next hourly update.');
     else {
       sub.append('Items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house (after its 5% cut), by gold changing hands a day (' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of data' + (h < 24 ? ', early estimates' : '') + '). ');
+      sub.append('The last three columns are the cheapest listing in each house right now. ');
       if (t.hiddenItems) sub.append('Left out: ' + t.hiddenItems.toLocaleString('en') + ' items (', coins(t.hiddenGold), ' a day) that cost more here than either house pays, mostly players moving goods between their own characters.');
     }
     markHeaders($('busy-card'), S.busySort, S.busyDir);
@@ -561,15 +571,20 @@
       tr.append(el('td', 'c-rank', String(i + 1)));
       const ti = el('td', 'c-item');
       ti.append(itemName(o));
-      const subl = el('span', 'item-sub only-s');
-      subl.append(num(o.soldDay, 1) + ' a day at ', coins(o.avg), ' ', resellBadges(o));
-      ti.append(subl);
-      const rs = el('td', 'hide-s'); rs.append(resellBadges(o));
+      const sold = el('span', 'item-sub only-l');
+      sold.append(num(o.soldDay, 1) + ' a day at ', coins(o.avg));
+      const badgesS = el('span', 'item-sub only-t'); badgesS.append(resellBadges(o));
+      const now = el('span', 'item-sub only-s');
+      now.append('Now: ');
+      if (o.low) now.append('Blackwater ', coins(o.low), ' · ');
+      now.append('Alliance ', coins(o.aLow), ' · Horde ', coins(o.hLow));
+      ti.append(sold, badgesS, now);
+      const rs = el('td', 'hide-t'); rs.append(resellBadges(o));
       const best = (o.xA || 0) >= (o.xH || 0) ? 'a' : 'h';
-      tr.append(ti, numTd(num(o.soldDay, 1), 'hide-s'), numTd(coins(o.avg), 'hide-s'), barCell({ marketDay: o.marketDay }, 'marketDay', max), rs,
-        numTd(o.low ? coins(o.low) : 'none listed', 'hide-m'),
-        numTd(coins(o.aRef), 'hide-m' + (best === 'a' ? ' lo' : '')),
-        numTd(coins(o.hRef), 'hide-m' + (best === 'h' ? ' lo' : '')));
+      tr.append(ti, numTd(num(o.soldDay, 1), 'hide-l'), numTd(coins(o.avg), 'hide-l'), barCell({ marketDay: o.marketDay }, 'marketDay', max), rs,
+        numTd(o.low ? coins(o.low) : '', 'hide-s'),
+        numTd(coins(o.aLow), 'hide-s' + (best === 'a' ? ' lo' : '')),
+        numTd(coins(o.hLow), 'hide-s' + (best === 'h' ? ' lo' : '')));
       tb.append(tr);
     });
     const more = $('busy-more');

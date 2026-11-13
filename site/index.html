@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=dev">
 </head>
 <body>
 <div class="page">
@@ -142,13 +142,13 @@
             <tr>
               <th class="c-rank" scope="col">#</th>
               <th class="c-item" scope="col" data-sort="name">Item</th>
-              <th class="num hide-s" scope="col" data-sort="soldDay">Sold a day</th>
-              <th class="num hide-s" scope="col" data-sort="avg" title="Average price buyers paid on Blackwater">Price paid</th>
+              <th class="num hide-l" scope="col" data-sort="soldDay">Sold a day</th>
+              <th class="num hide-l" scope="col" data-sort="avg" title="Average price buyers paid on Blackwater">Price paid</th>
               <th class="c-bar" scope="col" data-sort="marketDay">Gold a day</th>
-              <th class="hide-s" scope="col" data-sort="resellX" title="Faction house where it resells at a profit, and what each 1g spent on Blackwater brings back there after the 5% cut">Resell in</th>
-              <th class="num hide-m" scope="col" data-sort="low">Blackwater now</th>
-              <th class="num hide-m" scope="col" data-sort="aRef">Alliance</th>
-              <th class="num hide-m" scope="col" data-sort="hRef">Horde</th>
+              <th class="hide-t" scope="col" data-sort="resellX" title="Faction house where it resells at a profit, and what each 1g spent on Blackwater brings back there after the 5% cut">Resell in</th>
+              <th class="num hide-s" scope="col" data-sort="low" title="Cheapest listing on Blackwater now (empty if none is listed)">Blackwater</th>
+              <th class="num hide-s" scope="col" data-sort="aLow" title="Cheapest listing in the Alliance house now">Alliance</th>
+              <th class="num hide-s" scope="col" data-sort="hLow" title="Cheapest listing in the Horde house now">Horde</th>
             </tr>
           </thead>
           <tbody id="busy-body"></tbody>
@@ -191,6 +191,6 @@
   </footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
-<script src="app.js"></script>
+<script src="app.js?v=dev"></script>
 </body>
 </html>

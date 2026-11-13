@@ -409,6 +409,14 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
 - **Dark theme is the default** (owner's request); parchment is one tap away and remembered.
 - **Chart search** (owner's request): a box above the chart keeps only items whose name contains the text
   (e.g. "recipe") and labels them.
+- **Fix: empty price columns in Busiest on Blackwater.** The owner saw blank Alliance/Horde columns. Cause:
+  GitHub Pages lets browsers cache index.html/app.js/style.css for 10 minutes (and phones or in-app browsers
+  can keep them longer), while latest.json is always fetched fresh; the previous script read `aLow`/`hLow`,
+  which the profit-filter update had renamed. Fixes: the data again carries `aLow`/`hLow` (cheapest listing
+  now, which is what the owner wants to see; Blackwater left empty when not listed); every deploy stamps the
+  page, script and data with the commit, and a page that finds newer data reloads itself once; the table also
+  overflowed its card on 641–1100 px screens, so the columns now step down by width (prices stay visible from
+  641 px; phones show them on a "Now:" line).
 - **World of Warcraft look**: dark leather and gold trim (parchment in light mode), Cinzel headings,
   quality colours, gold/silver/copper coin colours, Alliance/Horde switch colours, in-game style tooltip.
   No Blizzard art or logos.

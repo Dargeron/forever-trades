@@ -123,6 +123,9 @@ def main():
                 lo = (ref - 0.5) * 0.95 / (o['avg'] + 0.5)
                 hi = (ref + 0.5) * 0.95 / max(0.01, o['avg'] - 0.5)
                 assert lo - 1e-3 <= x <= hi + 1e-3, (o, lo, hi)
+    for o in top:   # the site shows the cheapest listing now in each house; Alliance and Horde are always listed here
+        assert o['aLow'] and o['hLow'] and ('low' in o), o
+    assert out.get('siteVersion') == 'dev', out.get('siteVersion')   # stamped with the commit by update.yml
     print('busiest: left out', out['neutralTop']['hiddenItems'], 'items dearer on Blackwater than either house pays')
     print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')
     print('selftest OK ->', os.path.join(TMP, 'out', 'latest.json'))
