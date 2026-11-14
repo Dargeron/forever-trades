@@ -229,6 +229,7 @@
             <option value="trainer">Trainer only</option>
           </select>
         </label>
+        <label class="sort check"><input type="checkbox" id="eng-unknown"> <span id="eng-unknown-label">Forever recipes with unknown skill</span></label>
         <label class="sort">Specialisation
           <select id="eng-school">
             <option value="any">Gnomish and Goblin</option>
@@ -276,7 +277,8 @@
           <li><b>Sells for</b> is the item's cautious price in your faction's house: the cheapest listing now, or its 3-day median, 7-day typical price or what buyers paid if any of those is lower. <b>Profit per craft</b> is everything one craft makes (some recipes make 2 to 200) times that price, minus the 5% auction cut, minus the materials. Auction deposits aren't counted.</li>
           <li><b>Sold a day</b> is worked out from the hourly snapshots, like everywhere on this site, and is an estimate. <b>Profit a day</b> assumes you sell a quarter of that.</li>
           <li>A recipe with a big profit per craft but almost no sales may take a long time to sell. Recipes that lose money are listed too, at the bottom, and items that bind when picked up are left out (they can't be sold).</li>
-          <li><b>Skill</b> is the Engineering skill a recipe needs. Schematics have to be found or bought first; Gnomish and Goblin recipes need that specialisation.</li>
+          <li><b>Recipes are WoW: Forever's own</b>, read from Blizzard's game data: Forever changed several Classic recipes (the Mechanical Dragonling takes 4 Iron Struts, 4 Gyrochronatoms, 2 Citrines and Fused Wiring; rockets make 5) and added many (SAF-T and EZ-Thro devices, satchels of bombs, camping kits…).</li>
+          <li><b>Skill</b> is the Engineering skill a recipe needs. Blizzard's data doesn't include it, so it comes from the Classic recipe list and, for some Forever recipes, from a Forever recipe guide. Recipes whose skill we don't know are hidden unless you tick “Forever recipes with unknown skill”. Schematics have to be found or bought first; Gnomish and Goblin recipes need that specialisation.</li>
         </ul>
       </details>
     </section>

@@ -7,7 +7,7 @@
     sortDir: 'desc', showAll: false, open: new Set(), query: '',
     busySort: 'marketDay', busyDir: 'desc', busyAll: false, busyQuery: '', chartQuery: '', chartX: 'market',
     tab: 'trade', eng: null, engFor: null, engLoading: false, engError: null,
-    engSort: 'profit', engDir: 'desc', engAll: false, engQuery: '', engSkill: 220, engLearn: 'all', engSchool: 'any',
+    engSort: 'profit', engDir: 'desc', engAll: false, engQuery: '', engSkill: 220, engLearn: 'all', engSchool: 'any', engUnknown: false,
   };
   const FAC = { alliance: 'Alliance', horde: 'Horde' };
   const OTHER = { alliance: 'Horde', horde: 'Alliance' };
@@ -947,12 +947,13 @@
   }
   function engName(i) { const n = (S.eng.names || {})[i] || ['Item #' + i, 1]; return { id: i, name: n[0], q: n[1] }; }
   function qtyTxt(q) { return Math.abs(q - Math.round(q)) < 1e-6 ? String(Math.round(q)) : num(q, 2); }
-  function learnTxt(o) { return o.school ? (o.school === 'gnomish' ? 'Gnomish' : 'Goblin') : (o.learn === 'schematic' ? 'Schematic' : 'Trainer'); }
+  function learnTxt(o) { return o.school ? (o.school === 'gnomish' ? 'Gnomish' : 'Goblin') : ({ schematic: 'Schematic', unknown: 'Forever recipe' }[o.learn] || 'Trainer'); }
+  function skillTxt(o) { return o.skill === null || o.skill === undefined ? '?' : String(o.skill); }
   function engShare(o) { return o.soldDay ? 0.25 * o.soldDay : null; }
 
   function engList() {
     const f = S.eng.factions[S.faction] || { items: [] };
-    let list = f.items.filter((o) => o.skill <= S.engSkill
+    let list = f.items.filter((o) => (o.skill === null || o.skill === undefined ? S.engUnknown : o.skill <= S.engSkill)
       && (S.engLearn === 'all' || o.learn === 'trainer')
       && (S.engSchool === 'any' || (S.engSchool === 'none' ? !o.school : !o.school || o.school === S.engSchool)));
     if (S.engQuery) { const q = S.engQuery.toLowerCase(); list = list.filter((o) => o.name.toLowerCase().includes(q)); }
@@ -984,6 +985,9 @@
     const list = engList();
     renderEngTiles(list);
     const n = list.length, total = f.items.length;
+    const unknown = f.items.filter((o) => o.skill === null || o.skill === undefined).length;
+    $('eng-unknown-label').textContent = 'Forever recipes with unknown skill (' + unknown + ')';
+    $('eng-unknown').closest('label').hidden = !unknown;
     $('eng-title').textContent = n ? n + ' recipes up to skill ' + S.engSkill : 'Engineering recipes';
     const order = S.engSort === 'name' ? (S.engDir === 'asc' ? 'A to Z' : 'Z to A') : (S.engDir === 'asc' ? 'lowest first' : 'highest first');
     const lab = { name: 'name', skill: 'skill', cost: 'materials', sell: 'selling price', mult: 'back per 1g', soldDay: 'sold a day', profit: 'profit per craft', profitDay: 'profit a day' }[S.engSort];
@@ -1001,7 +1005,7 @@
       const ti = el('td', 'c-item');
       ti.append(itemName(o));
       const sub = el('span', 'item-sub');
-      sub.append(el('span', 'flag', 'Skill ' + o.skill), el('span', 'flag', learnTxt(o)));
+      sub.append(el('span', 'flag', 'Skill ' + skillTxt(o)), el('span', 'flag', learnTxt(o)));
       if (o.n !== 1) sub.append(el('span', 'flag', 'makes ' + num(o.n, 1)));
       if (o.missing && o.missing.length) sub.append(el('span', 'flag warn', 'no price for ' + o.missing.join(', ')));
       if (!o.sell) sub.append(el('span', 'flag', 'not seen in the ' + home + ' house'));
@@ -1011,7 +1015,7 @@
       const sd = el('span', 'item-sub only-m');
       sd.append('Sold a day (' + home + ' AH): ' + soldTxt(o));
       ti.append(ms, sd);
-      tr.append(ti, numTd(String(o.skill), 'hide-l'), numTd(coins(o.cost), 'hide-s'), numTd(o.sell ? fineCoins(o.sell) : '–', 'hide-s'));
+      tr.append(ti, numTd(skillTxt(o), 'hide-l'), numTd(coins(o.cost), 'hide-s'), numTd(o.sell ? fineCoins(o.sell) : '–', 'hide-s'));
       const tdr = numTd(mult(o.mult), 'ret c-ret'); if (o.mult) shade(tdr, o.mult, Math.log10(1.15), Math.log10(30)); tr.append(tdr);
       tr.append(numTd(soldTxt(o), 'hide-m'));
       const bar = el('td', 'c-bar'), val = el('span', 'val');
@@ -1133,8 +1137,9 @@
       ['Paid on average', o.paid ? coins(o.paid) : 'no sales seen yet'],
       ['Your share a day', share ? (share < 1 ? 'about 1 every ' + num(1 / share, 1) + ' days' : num(share, 1) + (o.n === 1 ? '' : ' (' + num(share / o.n, 1) + (share / o.n < 1.5 ? ' craft)' : ' crafts)'))) : '–'],
       ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'],
-      ['Skill needed', String(o.skill)],
+      ['Skill needed', o.skill === null || o.skill === undefined ? 'not known (a WoW: Forever recipe)' : String(o.skill)],
       ['How to learn it', o.how],
+      ['Category', o.cat || '–'],
     ];
     rows.forEach(([k, val]) => { const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv); });
     box.append(dl);
@@ -1193,6 +1198,7 @@
   });
   $('eng-learn').addEventListener('change', (e) => { S.engLearn = e.target.value; remember('engLearn', S.engLearn); renderEng(); });
   $('eng-school').addEventListener('change', (e) => { S.engSchool = e.target.value; remember('engSchool', S.engSchool); renderEng(); });
+  $('eng-unknown').addEventListener('change', (e) => { S.engUnknown = e.target.checked; remember('engUnknown', S.engUnknown ? '1' : '0'); renderEng(); });
   $('eng-search').addEventListener('input', (e) => { S.engQuery = e.target.value.trim(); renderEng(); });
   $('eng-more').addEventListener('click', () => { S.engAll = !S.engAll; renderEng(); });
   $('busy-search').addEventListener('input', (e) => { S.busyQuery = e.target.value.trim(); renderBusy(); });
@@ -1240,6 +1246,7 @@
   if (ENG_KEYS[es[0]]) { S.engSort = es[0]; S.engDir = es[1] === 'asc' || es[1] === 'desc' ? es[1] : 'desc'; }
   const sk = parseInt(recall('engSkill'), 10); if (sk >= 1 && sk <= 300) { S.engSkill = sk; $('eng-skill').value = String(sk); }
   const el2 = recall('engLearn'); if (el2 === 'all' || el2 === 'trainer') { S.engLearn = el2; $('eng-learn').value = el2; }
+  if (recall('engUnknown') === '1') { S.engUnknown = true; $('eng-unknown').checked = true; }
   const sc = recall('engSchool'); if (['any', 'gnomish', 'goblin', 'none'].indexOf(sc) >= 0) { S.engSchool = sc; $('eng-school').value = sc; }
   S.tab = location.hash === '#engineering' ? 'eng' : (location.hash ? 'trade' : (recall('tab') === 'eng' ? 'eng' : 'trade'));
   showTab();

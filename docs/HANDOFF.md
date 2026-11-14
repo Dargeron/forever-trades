@@ -483,6 +483,9 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   houses; Icy Veins, Wowhead, ConquestCapped, Nov 2026); minimum 1s per listing until Blizzard's planned cut to 1c.
   On 00:19 data 11 Alliance and 25 Alliance→Blackwater lines lose money if the deposit is lost (e.g. Eight of
   Portals: 3g75s Blackwater deposit for a 52s profit).
+- **Engineering recipes are now WoW: Forever's** (owner: "the Mechanical Dragonling is 4 Gyrochronatom"). Blizzard's
+  static-forever API serves the profession, skill tier and every recipe (reagents, amounts) but no skill levels;
+  29 of our 175 Classic recipes differed and ~90 were new. The dragonling's materials went from ~30s to ~74s.
 - **Rescan now** button (owner's request); see CLAUDE.md. The first manual rescan picked up the 01:19 snapshot.
 - **Dot size = sale price of one item** (owner's request; was profit a day). Log-scaled: chart prices ran from 10c to
   750g, so a strictly proportional size would leave nearly every dot a pinpoint. A key under the chart shows sample sizes.

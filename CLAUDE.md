@@ -16,9 +16,15 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   which also writes `pipeline/vendor.json`: `sell` (vendor sell price → auction deposits) and `gear` (white weapons and
   armour NPC vendors sell: [vendor price, faction 'A'/'H'/''] → price cap). Forever-only items' sell prices come from
   Blizzard's item API into `names.json` under `_sell`.
-- `pipeline/recipes.json`: every Classic Engineering recipe (skill, made per craft, reagents, trainer/schematic +
-  source, Gnomish/Goblin), the 15 smelting recipes, vendor prices of vendor-sold reagents, bind-on-pickup products.
-  Rebuild with `tools/build_recipes.py` (same wow-classic-items package; specialisation ids are hard-coded there).
+- `pipeline/recipes.json`: every Engineering and smelting recipe (skill, made per craft, reagents, trainer/schematic +
+  source, Gnomish/Goblin), vendor prices of vendor-sold reagents, bind-on-pickup products, Forever-only item names
+  and sell prices. Rebuild with `tools/build_recipes.py`. **Reagents and amounts are WoW: Forever's**, from
+  `pipeline/forever_recipes.json` (Blizzard's static-forever API: run the manual "Read recipes from Blizzard"
+  workflow, download its artifact, `python3 tools/import_forever_recipes.py recipes_forever.json`). Forever changed
+  29 of 175 Classic recipes (Mechanical Dragonling: 4 Iron Strut, 4 Gyrochronatom, 2 Citrine, Fused Wiring; rockets
+  make 5…) and added ~90 (Season of Discovery recipes, also served, are skipped). The API has no skill levels or
+  schematics: those come from wow-classic-items; `FOREVER_SKILL` (wow.gg) and rocket colours fill some new ones;
+  the rest are `skill: null` (hidden on the site unless "unknown skill" is ticked).
 - `site/`: `index.html`, `style.css`, `app.js` (vanilla JS, no dependencies; Cinzel from Google Fonts). Reads
   `site/data/latest.json`. WoW look: dark leather/gold (parchment in light mode), quality-coloured names, coin colours.
   Sections: ranked table, return-vs-market chart, ten biggest markets/returns, shopping list, busiest on Blackwater.

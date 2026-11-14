@@ -110,7 +110,8 @@ Only the Python standard library is used.
   (walking up the listings for the amount needed; its recent median if none is listed), its vendor price,
   or making it (smelting, engineering parts), recursively. Sells for = the item's cautious price in your
   house; profit per craft = made per craft × that × 0.95 − materials. Bind-on-pickup products are left
-  out. Smelting assumes the Mining skill. Recipes come from wow-classic-items (Classic data).
+  out. Smelting assumes the Mining skill. Recipes (reagents, amounts) are WoW: Forever's, read from Blizzard's
+  game-data API; skill levels and schematics come from wow-classic-items (Classic data).
 - **Chart, across**: market a day (default) or the sale price of one item. Dot size: the sale price of one item
   (stepping up evenly with each tenfold rise in price), with a size key. Market a day = sold a day ×
   (price − deposit), so a cheap item that sells often sits right of a dear one that rarely sells.

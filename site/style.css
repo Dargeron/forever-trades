@@ -291,6 +291,8 @@ tr.details-row > td { background: var(--panel-3); padding: 10px 12px 12px; }
 
 /* engineering */
 .filters { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 4px 0 6px; }
+.sort.check { gap: 6px; cursor: pointer; }
+.sort.check input { width: 18px; height: 18px; accent-color: var(--trim); }
 .filters input[type="number"] { font: inherit; font-size: 14px; color: var(--ink); background: var(--panel-3); border: 1px solid var(--edge); border-radius: 8px; padding: 7px 8px; min-height: 40px; width: 5.2em; }
 .eng tr.loss td:not(.c-rank) { opacity: .62; }
 .eng tr.loss .money { color: var(--ink-2); }

@@ -389,6 +389,9 @@ def item_info(i, names_cache):
     c = names_cache.get(str(i))
     if c:
         return c
+    r = (RECIPES.get('names') or {}).get(str(i))         # WoW: Forever items from the recipe list
+    if r:
+        return r + [0]
     return [f'Item #{i}', 1, '', '', 0]
 
 
@@ -445,6 +448,8 @@ def deposit(i, kind, names_cache):
     vsp = VENDOR['sell'].get(str(i))
     if vsp is None:
         vsp = (names_cache.get('_sell') or {}).get(str(i))
+    if vsp is None:
+        vsp = (RECIPES.get('sell') or {}).get(str(i))
     known = vsp is not None or str(i) in ITEMS
     info = item_info(i, names_cache)
     floor = dc.get('min_listing', 100) / (dc.get('stack', 20) if info[2] in STACKABLE else 1)
@@ -730,7 +735,7 @@ def engineering(fac, data, hist, now_dt, names_cache, series):
         profit = back - cost if back is not None and cost is not None else None
         info = item_info(i, names_cache)
         out.append(dict(
-            id=i, name=info[0], q=info[1], skill=c['skill'], n=n, learn=c['learn'], how=c['how'], school=c['school'],
+            id=i, name=info[0], q=info[1], skill=c['skill'], n=n, learn=c['learn'], how=c['how'], school=c['school'], cat=c.get('cat'),
             cost=cost, sell=round(sell, 2) if sell else None, back=int(round(back)) if back else None,     # ammo: a few copper each
             profit=int(round(profit)) if profit is not None else None,
             mult=round(back / cost, 3) if back and cost else None,
