@@ -843,6 +843,41 @@ def cmd_probe(api, args):
         print(out)
 
 
+def cmd_recipes(api, args):
+    """Engineering and Mining recipes as Blizzard's static-forever API serves them (WoW: Forever changed some
+    Classic recipes and added others). Writes everything it finds to --out-file and prints a line per recipe."""
+    st, body, _ = api.get('/data/wow/profession/index', ns='static')
+    print('profession index: HTTP', st, json.dumps(body)[:1200] if body else '')
+    out = {'index': body, 'professions': {}}
+    for prof in ((body or {}).get('professions') or []):
+        if prof.get('name') not in ('Engineering', 'Mining'):
+            continue
+        st2, b2, _ = api.get(f"/data/wow/profession/{prof['id']}", ns='static')
+        print(f"{prof['name']} ({prof['id']}): HTTP {st2}", json.dumps({k: v for k, v in (b2 or {}).items() if k != '_links'})[:1500])
+        p = out['professions'][prof['name']] = {'detail': b2, 'tiers': {}}
+        for tier in ((b2 or {}).get('skill_tiers') or []):
+            st3, b3, _ = api.get(f"/data/wow/profession/{prof['id']}/skill-tier/{tier['id']}", ns='static')
+            cats = (b3 or {}).get('categories') or []
+            print(f"  tier {tier.get('id')} {tier.get('name')}: HTTP {st3}, {len(cats)} categories,",
+                  sum(len(c.get('recipes') or []) for c in cats), 'recipes', json.dumps({k: v for k, v in (b3 or {}).items() if k not in ('_links', 'categories')})[:300])
+            t = p['tiers'][str(tier['id'])] = {'tier': b3, 'recipes': {}}
+            for c in cats:
+                for r in c.get('recipes') or []:
+                    st4, b4, _ = api.get(f"/data/wow/recipe/{r['id']}", ns='static')
+                    t['recipes'][str(r['id'])] = b4
+                    if b4:
+                        made = b4.get('crafted_item') or b4.get('alliance_crafted_item') or {}
+                        q = b4.get('crafted_quantity') or {}
+                        reag = '; '.join(f"{x.get('quantity')} x {(x.get('reagent') or {}).get('name')}" for x in b4.get('reagents') or [])
+                        extra = sorted(k for k in b4 if k not in ('_links', 'id', 'name', 'media', 'crafted_item', 'crafted_quantity', 'reagents', 'description'))
+                        print(f"    {c.get('name')} | {b4.get('name')} | item {made.get('id')} | made {q} | {reag} | other keys {extra}")
+                    else:
+                        print(f"    recipe {r['id']} {r.get('name')}: HTTP {st4}")
+    if args.out_file:
+        with open(args.out_file, 'w') as f:
+            json.dump(out, f, separators=(',', ':'))
+
+
 def lookup_names(api, missing, names_cache, limit=300):
     n = 0
     for i in missing:
@@ -1003,7 +1038,7 @@ def cmd_run(api, args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['run', 'probe'])
+    ap.add_argument('cmd', choices=['run', 'probe', 'recipes'])
     ap.add_argument('--state', default='state')
     ap.add_argument('--out', default='site/data')
     ap.add_argument('--fixtures')
@@ -1013,7 +1048,7 @@ def main():
     ap.add_argument('--github-output', default=os.environ.get('GITHUB_OUTPUT'))
     args = ap.parse_args()
     api = Api(fixtures=args.fixtures)
-    {'run': cmd_run, 'probe': cmd_probe}[args.cmd](api, args)
+    {'run': cmd_run, 'probe': cmd_probe, 'recipes': cmd_recipes}[args.cmd](api, args)
     print(f'API calls: {api.calls}', file=sys.stderr)
 
 

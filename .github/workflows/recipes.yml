@@ -1,0 +1,25 @@
+name: Read recipes from Blizzard
+
+# Manual helper: lists the Engineering and Mining recipes that Blizzard's WoW: Forever game-data
+# API serves (reagents and amounts), to check pipeline/recipes.json against the game. Prints no secrets.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recipes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read recipes
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+        run: python3 pipeline/update.py recipes --out-file recipes_forever.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: recipes-forever
+          path: recipes_forever.json
