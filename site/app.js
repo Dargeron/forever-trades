@@ -13,9 +13,9 @@
   const OTHER = { alliance: 'Horde', horde: 'Alliance' };
   const VERSION = 'dev';   // stamped with the commit at deploy time (see update.yml)
   const PAGE = 40, BUSY_PAGE = 25;
-  const SORTS = { profitDay: 'Profit a day', mult: 'Back per 1g (×)', marketDay: 'Market a day', soldDay: 'Sold a day', profitEach: 'Profit per item', buy: 'Buy price', sell: 'Sell price', name: 'Name' };
-  const KEY_LABEL = { profitDay: 'profit a day', mult: 'back per 1g', marketDay: 'market a day', soldDay: 'sold a day', profitEach: 'profit per item', buy: 'buy price', sell: 'sell price', name: 'name' };
-  const ALWAYS = { mult: 1, profitEach: 1, buy: 1, sell: 1, name: 1 };
+  const SORTS = { profitDay: 'Profit a day', mult: 'Back per 1g (×)', marketDay: 'Market a day', soldDay: 'Sold a day', profitEach: 'Profit per item', expected: 'Expected profit (after deposit)', buy: 'Buy price', sell: 'Sell price', name: 'Name' };
+  const KEY_LABEL = { profitDay: 'profit a day', mult: 'back per 1g', marketDay: 'market a day (after deposits)', soldDay: 'sold a day', profitEach: 'profit per item', expected: 'expected profit per item, after the deposit', buy: 'buy price', sell: 'sell price', name: 'name' };
+  const ALWAYS = { mult: 1, profitEach: 1, expected: 1, buy: 1, sell: 1, name: 1 };
   const BUSY_KEYS = { name: 1, soldDay: 1, avg: 1, marketDay: 1, resellX: 1, low: 1, aLow: 1, hLow: 1 };
   const ENG_KEYS = { name: 1, skill: 1, cost: 1, sell: 1, mult: 1, soldDay: 1, profit: 1, profitDay: 1 };
   const $ = (id) => document.getElementById(id);
@@ -262,7 +262,7 @@
     const tb = $('rank-body'); tb.textContent = '';
     if (!list.length) {
       const tr = el('tr'), td = el('td', 'empty', S.query ? 'No item matches “' + S.query + '”.' : 'No item clears a ×1.15 return right now. Check back after the next update.');
-      td.colSpan = 8; tr.append(td); tb.append(tr); $('more').hidden = true; return;
+      td.colSpan = 9; tr.append(td); tb.append(tr); $('more').hidden = true; return;
     }
     const max = Math.max.apply(null, list.map((o) => o[barKey] || 0)) || 1;
     const shown = S.showAll || S.query ? list : list.slice(0, PAGE);
@@ -275,6 +275,7 @@
       ti.append(itemName(o));
       const sub = el('span', 'item-sub');
       const bs = el('span', 'flag only-s'); bs.append(coins(o.buy), ' → ', coins(o.sell)); sub.append(bs);
+      const ex = el('span', 'flag only-s' + (o.expected < 0 ? ' neg' : '')); ex.append('after deposit ', coins(o.expected, true)); sub.append(ex);
       if (toBW()) sub.append(el('span', 'flag', o.undercut ? 'matches Blackwater' : '½ of ' + other + ' ' + money(o.ref)));
       if (o.soldDay === 0) sub.append(el('span', 'flag', 'none sold yet'));
       if (o.trend === 'falling') sub.append(el('span', 'flag warn', (toBW() ? other + ' ' : '') + 'price falling'));
@@ -282,11 +283,12 @@
       ti.append(sub);
       tr.append(ti, numTd(coins(o.buy), 'hide-s'), numTd(coins(o.sell), 'hide-s'));
       const tdr = numTd(mult(o.mult), 'ret c-ret'); shade(tdr, o.mult, Math.log10(1.15), Math.log10(30)); tr.append(tdr);
-      const tdm = numTd(o.marketDay ? coins(o.marketDay) : '–', 'mkt hide-s'); if (o.marketDay) shade(tdm, o.marketDay, 4, 6.7); tr.append(tdm);
+      tr.append(numTd(coins(o.expected, true), 'hide-s' + (o.expected < 0 ? ' neg' : '')));
+      const tdm = numTd(o.marketDay ? coins(o.marketDay) : '–', 'mkt hide-s'); if (o.marketDay > 0) shade(tdm, o.marketDay, 4, 6.7); tr.append(tdm);
       tr.append(numTd(soldTxt(o), 'hide-m'), barCell(o, barKey, max));
       const dr = el('tr', 'details-row');
       dr.hidden = !S.open.has(o.id);
-      const dtd = el('td'); dtd.colSpan = 8; dr.append(dtd);
+      const dtd = el('td'); dtd.colSpan = 9; dr.append(dtd);
       if (S.open.has(o.id)) dtd.append(details(o));
       const toggle = () => {
         if (!dtd.firstChild) dtd.append(details(o));
@@ -339,7 +341,102 @@
     $('modal-close').focus();
   }
   function closeModal() { $('modal').hidden = true; }
+  function openDialog(title, body) {
+    $('modal-title').textContent = title;
+    const b = $('modal-body'); b.textContent = ''; b.append(body);
+    $('tooltip').hidden = true; $('modal').hidden = false; $('modal-close').focus();
+  }
 
+  // ---------- rescan: start the update job on GitHub (Blizzard -> pipeline -> this site)
+  // A static page can't start it on its own: GitHub needs a key that may run this repo's workflows. The owner
+  // can keep one in this browser only (localStorage, sent only to api.github.com); it is never in the site's code.
+  const REPO = 'Dargeron/forever-trades';
+  const RUN_PAGE = 'https://github.com/' + REPO + '/actions/workflows/update.yml';
+  let watchTimer = null;
+  function rescanStatus(msg) { $('rescan-status').textContent = msg; }
+  async function rescan() {
+    const key = recall('gh-key');
+    if (!key) { rescanSetup(); return; }
+    const btn = $('rescan'); btn.disabled = true;
+    rescanStatus('Starting a rescan…');
+    try {
+      const r = await fetch('https://api.github.com/repos/' + REPO + '/actions/workflows/update.yml/dispatches', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + key, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: 'main', inputs: { force: 'false' } }),
+      });
+      if (r.status === 204 || r.status === 200) {
+        rescanStatus('Rescan started. If Blizzard has newer prices, this page updates by itself in about 3 minutes.');
+        watchForNew();
+      } else if (r.status === 401 || r.status === 403 || r.status === 404) {
+        rescanStatus('GitHub refused the key (' + r.status + '): it may have expired or lack the Actions permission.');
+        rescanSetup();
+      } else rescanStatus('GitHub answered ' + r.status + '. Try again in a minute.');
+    } catch (e) { rescanStatus('Could not reach GitHub (' + e.message + ').'); }
+    btn.disabled = false;
+  }
+  // Watch for the rebuilt data for up to 6 minutes, then say what happened.
+  function watchForNew() {
+    clearInterval(watchTimer);
+    const was = S.data && S.data.generated, start = Date.now();
+    watchTimer = setInterval(async () => {
+      try {
+        const r = await fetch('data/latest.json?t=' + Date.now(), { cache: 'no-store' });
+        const d = await r.json();
+        if (d.generated !== was) {
+          clearInterval(watchTimer);
+          await load();
+          rescanStatus('Updated: prices from Blizzard’s snapshot of ' + hhmm(Object.values(d.houses).map((h) => h.snapshot).sort()[0]) + '.');
+          return;
+        }
+      } catch (e) { /* try again next time */ }
+      if (Date.now() - start > 6 * 60000) {
+        clearInterval(watchTimer);
+        rescanStatus('No newer prices from Blizzard yet. It publishes new auction data about every one to two hours; try again later.');
+      }
+    }, 20000);
+  }
+  function rescanSetup() {
+    const box = el('div', 'details rescan-setup');
+    box.append(el('p', null, 'A rescan asks Blizzard for its newest auction snapshot and rebuilds this site, in about 2–3 minutes. Blizzard publishes new prices about every one to two hours, so a rescan helps once a newer snapshot exists; the site also checks by itself every hour.'));
+    box.append(el('h4', 'history-title', 'Quick way: on GitHub'));
+    const p1 = el('p'), a = el('a', 'copy', 'Open GitHub’s “Run workflow” page');
+    a.href = RUN_PAGE; a.target = '_blank'; a.rel = 'noopener';
+    p1.append(a, el('br'), el('span', 'muted', 'Signed in as the site’s owner, tap “Run workflow”, then the green “Run workflow” button.'));
+    box.append(p1);
+    box.append(el('h4', 'history-title', 'One tap from this device'));
+    const ol = el('ol');
+    const li1 = el('li'), a2 = el('a', null, 'GitHub’s new fine-grained token page');
+    a2.href = 'https://github.com/settings/personal-access-tokens/new'; a2.target = '_blank'; a2.rel = 'noopener';
+    li1.append('Open ', a2, ' (signed in as the site’s owner). Give it any name and an expiry date.');
+    ol.append(li1,
+      el('li', null, 'Repository access: “Only select repositories” → forever-trades.'),
+      el('li', null, 'Permissions → Repository permissions → Actions: “Read and write”. Nothing else.'),
+      el('li', null, 'Generate the token, copy it and paste it here:'));
+    box.append(ol);
+    const row = el('div', 'key-row'), inp = el('input'), save = el('button', 'copy', 'Save and rescan');
+    inp.type = 'password'; inp.placeholder = 'github_pat_…'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'GitHub token');
+    save.type = 'button';
+    save.addEventListener('click', () => {
+      const k = inp.value.trim();
+      if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(k)) { inp.focus(); rescanStatus('That doesn’t look like a GitHub token.'); return; }
+      remember('gh-key', k); closeModal(); rescan();
+    });
+    row.append(inp, save); box.append(row);
+    box.append(el('p', 'muted', 'The key stays in this browser on this device and is sent only to GitHub. It can only start this site’s update job. Don’t paste it anywhere else.'));
+    if (recall('gh-key')) {
+      const f = el('button', 'copy', 'Forget the key on this device'); f.type = 'button';
+      f.addEventListener('click', () => { try { localStorage.removeItem('ft-gh-key'); } catch (e) { /* ignore */ } closeModal(); rescanStatus('Key forgotten.'); });
+      box.append(f);
+    }
+    openDialog('Rescan the auction houses', box);
+  }
+
+  function depTxt(o) { return o.depKnown === false ? join(coins(o.dep), ' (at least; vendor price unknown)') : coins(o.dep); }
+  function mktTxt(o) {
+    if (!o.marketDay && o.marketDay !== 0) return '–';
+    return o.marketGross ? join(coins(o.marketDay), ' ', el('span', 'muted', '(' + money(o.marketGross) + ' before a ' + money(o.mktDep) + ' deposit each)')) : coins(o.marketDay);
+  }
   function details(o) {
     const home = FAC[S.faction], other = OTHER[S.faction];
     const box = el('div', 'details');
@@ -357,13 +454,15 @@
       ['Sell at (Blackwater)', join(coins(o.sell), o.undercut ? ', matching Blackwater' : ', ' + (sh === 50 ? 'half' : sh + '% of') + ' the ' + other + ' price')],
       ['You get back (after 15% cut)', coins(o.back)],
       ['Profit per item', coins(o.profitEach, true)],
+      ['Deposit on Blackwater (24 h; lost if it doesn’t sell)', depTxt(o)],
+      ['Expected profit, deposit lost', coins(o.expected, true)],
       ['Return', mult(o.mult) + ' · ' + o.tag],
       ['Sold a day in the ' + other + ' house', soldTxt(o)],
       ['Your share a day', shareTxt(o)],
       ['Spend a day', spend],
       ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'],
       ['Listed in the ' + other + ' house', num(o.refQty, 0)],
-      ['Gold a day in the ' + other + ' house', o.marketDay ? coins(o.marketDay) : '–'],
+      ['Gold a day in the ' + other + ' house, after deposits', mktTxt(o)],
     ] : [
       ['Buy at (Blackwater)', buyNode],
       ['Listed on Blackwater', num(o.srcQty, 0)],
@@ -371,6 +470,8 @@
       ['Paid on average in the ' + home + ' house', o.dstPaid ? coins(o.dstPaid) : 'no sales seen yet'],
       ['You get back (after 5% cut)', coins(o.back)],
       ['Profit per item', coins(o.profitEach, true)],
+      ['Deposit in the ' + home + ' house (24 h; lost if it doesn’t sell)', depTxt(o)],
+      ['Expected profit, deposit lost', coins(o.expected, true)],
       ['Return', mult(o.mult) + ' · ' + o.tag],
       ['Sold a day in the ' + home + ' house', soldTxt(o)],
       ['Your share a day', shareTxt(o)],
@@ -378,7 +479,7 @@
       ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'],
       ['Listed in the ' + home + ' house', num(o.dstQty, 0)],
       ['7-day typical in the ' + home + ' house', o.dstTyp ? coins(o.dstTyp) : 'building'],
-      ['Gold a day in the ' + home + ' house', o.marketDay ? coins(o.marketDay) : '–'],
+      ['Gold a day in the ' + home + ' house, after deposits', mktTxt(o)],
     ];
     rows.forEach(([k, val]) => { const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv); });
     box.append(dl);
@@ -496,7 +597,7 @@
     tip.append(el('div', 'tn tq' + (o.q === undefined ? 1 : o.q), o.name), el('div', 'tsub', mult(o.mult) + ' back per 1g · ' + o.tag));
     const rows = [['Buy', coins(o.buy)]];
     if (toBW()) rows.push([other + ' price', coins(o.ref)]);
-    rows.push(['Sell', coins(o.sell)], ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'], ['Sold a day (' + buyersAH() + ')', soldTxt(o)], ['Market a day (' + buyersAH() + ')', coins(o.marketDay)]);
+    rows.push(['Sell', coins(o.sell)], ['Expected profit (after deposit)', coins(o.expected, true)], ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'], ['Sold a day (' + buyersAH() + ')', soldTxt(o)], ['Market a day (' + buyersAH() + ')', coins(o.marketDay)]);
     rows.forEach(([a, b]) => { const r = el('div', 'tr'), vb = el('span'); vb.append(b); r.append(el('span', null, a), vb); tip.append(r); });
     tip.append(el('div', 'tfoot', 'Click the dot for all the details'));
     tip.hidden = false;
@@ -1106,6 +1207,8 @@
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.data && S.tab === 'trade') renderScatter(view(), basket(view(), S.budget)); }, 150); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.loadedAt && Date.now() - S.loadedAt > 10 * 60000) load(); });
   setInterval(() => { if (S.data) renderFresh(); }, 60000);
+  $('rescan').addEventListener('click', rescan);
+  $('rescan').addEventListener('contextmenu', (e) => { e.preventDefault(); rescanSetup(); });   // long-press/right-click: key settings
 
   function applyTheme(light) {
     if (light) document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme;

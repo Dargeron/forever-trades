@@ -48,7 +48,9 @@ redeployed.
    is 111/114/117). The **Probe auction houses** workflow lists every house with a price sample,
    if they ever need re-checking.
 
-Run **Update prices** from the Actions tab at any time to refresh by hand.
+Run **Update prices** from the Actions tab at any time to refresh by hand, or tap **Rescan now** on the site:
+without a key it opens that page; with a fine-grained GitHub token (this repository only, Actions: read and write)
+pasted once, it starts the job in one tap. The token stays in that browser only.
 
 ## Tests
 
@@ -80,10 +82,18 @@ Only the Python standard library is used.
   3-day median market price (hourly, from `state/series.json.gz`, once 3 points exist), its 7-day
   typical price and the average price buyers actually paid. A few silly listings left after the
   reasonable copies sold can't set the price. A cancel-and-repost at the same price is not a sale.
+  "Paid" is itself estimated from vanished listings, so it never sets a price alone: with nothing listed
+  and no median or typical price, the item is left out. With 2 hours between snapshots, only listings that
+  had 12+ hours left count as sold when they vanish (others may have expired). White gear that NPC
+  vendors sell is never priced above the vendor price.
 - **Price history**: open any item for an hourly graph of its cheapest price in each house (72 h),
   the 3-day median, the cheapest of 7 days and since tracking began (13 Nov 2026), and what buyers
   paid. History cannot be backfilled: Blizzard only serves the current snapshot, and other sites'
   terms forbid storing their data. One small `data/series/<id>.json` per listed item.
+- **Deposits**: listing for 24 h costs a deposit of 60% of the item's vendor sell price in a faction house and
+  300% on Blackwater (at least 1s per listing; stacks of 20 assumed for trade goods). It comes back when the item
+  sells and is lost if it doesn't. **Expected profit (each, after deposit)** = profit per item − that deposit, as if
+  it were lost. **Market a day** = sold a day × (price − the deposit to list one there).
 - **Return (×)**: (sell × (1 − cut)) ÷ buy. Shown when ≥ ×1.15.
 - **Sold a day**: estimated where the buyers are: your house (Blackwater → home) or the other faction's
   house (home → Blackwater). Blackwater's own thin sales never set a quantity.
@@ -103,8 +113,9 @@ Only the Python standard library is used.
   out. Smelting assumes the Mining skill. Recipes come from wow-classic-items (Classic data).
 - **Chart, across**: market a day (default) or the sale price of one item. Dot size: the sale price of one item
   (stepping up evenly with each tenfold rise in price), with a size key. Market a day = sold a day ×
-  price, so a cheap item that sells often sits right of a dear one that rarely sells.
-- Deposits are not included.
+  (price − deposit), so a cheap item that sells often sits right of a dear one that rarely sells.
+- Deposits are counted in the expected-profit column and in market a day; profit a day, the shopping list and
+  the Engineering tab don't subtract them.
 
 ## Credits
 

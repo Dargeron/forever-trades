@@ -23,10 +23,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.environ.get('FT_CONFIG') or os.path.join(HERE, 'config.json')))
 ITEMS = json.load(open(os.path.join(HERE, 'items.json')))
 RECIPES = json.load(open(os.path.join(HERE, 'recipes.json')))     # tools/build_recipes.py
+VENDOR = json.load(open(os.path.join(HERE, 'vendor.json')))       # tools/build_items.py: vendor sell prices, vendor-sold gear
 
 TOKEN_URL = 'https://oauth.battle.net/token'
-TL_SAFE_SHORT_GAP = {'LONG', 'VERY_LONG'}      # can't expire within ~2 h
-TL_SAFE_LONG_GAP = {'VERY_LONG'}               # can't expire within 12 h
+TL_SAFE_SHORT_GAP = {'LONG', 'VERY_LONG'}      # LONG = 2-12 h left: can't expire before the next snapshot if it is < 2 h away
+TL_SAFE_LONG_GAP = {'VERY_LONG'}               # VERY_LONG = 12+ h left: can't expire within 12 h
+SHORT_GAP_HOURS = 1.75                         # Forever's snapshots often come 2 h apart: then LONG listings may just expire
+STACKABLE = ('Trade Goods', 'Consumable', 'Reagent', 'Projectile')
 HISTORY_DAYS = 14
 WINDOW_DAYS = 7
 MIN_SALES_HOURS = 6                            # below this: "warming", every price gap is listed, no volume filter
@@ -188,7 +191,9 @@ def diff_sales(prev, cur, gap_hours):
     """
     if gap_hours <= 0 or gap_hours > 12:
         return {}
-    safe = TL_SAFE_SHORT_GAP if gap_hours <= 2.2 else TL_SAFE_LONG_GAP
+    # 14 Nov: ten 10g Short Staffs left the Horde house between the 22:19 and 00:19 snapshots and were
+    # counted as sold; with 2 hours between snapshots, listings with LONG (2-12 h) left may have expired.
+    safe = TL_SAFE_SHORT_GAP if gap_hours <= SHORT_GAP_HOURS else TL_SAFE_LONG_GAP
     cur_by_id = {r['id']: r for r in cur}
     prev_ids = set()
     survivors_min, gone = {}, {}
@@ -403,14 +408,47 @@ def gear_skip(info, s):
     return info[4] or (info[2] in ('Armor', 'Weapon') and s['variants'] > 1)
 
 
-def cautious(d, typ, paid=None, med=None):
+def cautious(d, typ, paid=None, med=None, cap=None):
     """The price to plan with on a house: the lowest of its cheapest listing now, its 3-day
     median market price (hourly), its 7-day typical price and the average price buyers actually
     paid. Spike protection: when the reasonable copies have sold and only a few silly ones are
     left (13 Nov: only 20g Billy Clubs in the Horde house while buyers paid a few silver), the
-    median and the paid price keep the plan honest. None if nothing is known."""
-    vals = [x for x in ((d['low'] if d else None), med, typ, paid) if x]
+    median and the paid price keep the plan honest.
+
+    'Paid' is itself an estimate (listings that vanished), so it never sets a price on its own:
+    with nothing listed now and no median or typical price, the item has no price (14 Nov: Short
+    Staff priced at 9g in the Horde house from ten 10g listings that vanished, nothing left listed).
+    `cap`: the NPC vendor price for vendor-sold white gear; nobody pays more on an auction house.
+    None if nothing is known."""
+    if not d and not med and not typ:
+        return None
+    vals = [x for x in ((d['low'] if d else None), med, typ, paid, cap) if x]
     return min(vals) if vals else None
+
+
+def vendor_cap(i, house):
+    """Vendor price of white weapons and armour that NPC vendors sell to buyers on `house`."""
+    v = VENDOR['gear'].get(str(i))
+    if not v:
+        return None
+    price, fac = v
+    return price if (house == 'neutral' or not fac or fac == house[0].upper()) else None
+
+
+def deposit(i, kind, names_cache):
+    """Auction deposit for one item listed for 24 h (Classic rule, used by WoW: Forever): a share of
+    its vendor sell price, `kind` 'faction' or 'neutral' (Blackwater: five times as much), at least
+    the minimum per listing (shared by a stack of 20 for stackable goods). Returned when the item
+    sells, lost if it expires or is cancelled. Returns (copper per item, vendor price known)."""
+    dc = CONFIG.get('deposit') or {}
+    rate = dc.get(kind, 0.6 if kind == 'faction' else 3.0)
+    vsp = VENDOR['sell'].get(str(i))
+    if vsp is None:
+        vsp = (names_cache.get('_sell') or {}).get(str(i))
+    known = vsp is not None or str(i) in ITEMS
+    info = item_info(i, names_cache)
+    floor = dc.get('min_listing', 100) / (dc.get('stack', 20) if info[2] in STACKABLE else 1)
+    return int(math.ceil(max(rate * (vsp or 0), floor))), known
 
 
 def trend_of(d, typ):
@@ -481,9 +519,9 @@ def busiest(hist, house, data, now_dt, names_cache, series=None):
         i = int(item)
         avg = copper / units
         a_ref = cautious(A.get(i), item_history(hist, 'alliance', i, now_dt)[1], avg_paid(hist, 'alliance', i, now_dt),
-                         series_median(series or {}, 'alliance', i))
+                         series_median(series or {}, 'alliance', i), vendor_cap(i, 'alliance'))
         h_ref = cautious(Hd.get(i), item_history(hist, 'horde', i, now_dt)[1], avg_paid(hist, 'horde', i, now_dt),
-                         series_median(series or {}, 'horde', i))
+                         series_median(series or {}, 'horde', i), vendor_cap(i, 'horde'))
         s = S.get(i)
         basis = s['low'] if s else avg      # buy price on Blackwater: cheapest listing now, else the average paid
         xa = a_ref * keep / basis if a_ref else None
@@ -521,7 +559,7 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
         spd, typ, _ = item_history(hist, dst_house, item, now_dt)
         paid = avg_paid(hist, dst_house, item, now_dt)
         med = series_median(series or {}, dst_house, item)
-        sell = cautious(d, typ, paid, med)
+        sell = cautious(d, typ, paid, med, vendor_cap(item, dst_house))
         if not sell:
             continue
         back = sell * (1 - dst_cut)
@@ -533,6 +571,7 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
         units, avg, mult, profit_each, profit_day, ladder = p
         typ_src = item_history(hist, src_house, item, now_dt)[1]
         dst_qty = d['qty'] if d else 0
+        dep, dep_known = deposit(item, 'faction', names_cache)     # listed at home; market a day is that house too
         out.append(dict(
             id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
             buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
@@ -541,9 +580,10 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
             soldDay=round(spd, 2) if spd is not None else None,
             unitsDay=round(units, 2) if units is not None else None,
             mult=round(mult, 3), profitEach=int(round(profit_each)),
+            dep=dep, depKnown=dep_known, expected=int(round(profit_each)) - dep,
             profitDay=int(round(profit_day)) if profit_day is not None else None,
-            marketDay=int(round(spd * sell)) if spd else None,
-            daysStock=round(dst_qty / spd, 1) if spd else None,
+            marketDay=int(round(spd * (sell - dep))) if spd else None, marketGross=int(round(spd * sell)) if spd else None,
+            mktDep=dep, daysStock=round(dst_qty / spd, 1) if spd else None,
             tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(d, typ), ladder=ladder))
     return finish(out, warming), warming, dst_hours
 
@@ -570,7 +610,7 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
         spd, typ, _ = item_history(hist, other_key, item, now_dt)
         paid = avg_paid(hist, other_key, item, now_dt)
         med = series_median(series or {}, other_key, item)
-        ref = cautious(o, typ, paid, med)
+        ref = cautious(o, typ, paid, med, vendor_cap(item, other_key))
         if not ref:
             continue
         half = ref * share
@@ -586,6 +626,8 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
         units, avg, mult, profit_each, profit_day, ladder = p
         typ_src = item_history(hist, home_key, item, now_dt)[1]
         o_qty = o['qty'] if o else 0
+        dep, dep_known = deposit(item, 'neutral', names_cache)     # you list on Blackwater
+        fdep, _ = deposit(item, 'faction', names_cache)            # market a day: the other faction's sellers pay this
         out.append(dict(
             id=item, name=info[0], q=info[1], cls=info[2], sub=info[3],
             buy=int(round(avg)), low=s['low'], srcQty=s['qty'], srcTyp=int(typ_src) if typ_src else None,
@@ -597,9 +639,10 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
             soldDay=round(spd, 2) if spd is not None else None,
             unitsDay=round(units, 2) if units is not None else None,
             mult=round(mult, 3), profitEach=int(round(profit_each)),
+            dep=dep, depKnown=dep_known, expected=int(round(profit_each)) - dep,
             profitDay=int(round(profit_day)) if profit_day is not None else None,
-            marketDay=int(round(spd * ref)) if spd else None,
-            daysStock=round(o_qty / spd, 1) if spd else None,
+            marketDay=int(round(spd * (ref - fdep))) if spd else None, marketGross=int(round(spd * ref)) if spd else None,
+            mktDep=fdep, daysStock=round(o_qty / spd, 1) if spd else None,
             tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(o, typ), ladder=ladder))
     return finish(out, warming), warming, hours
 
@@ -682,7 +725,7 @@ def engineering(fac, data, hist, now_dt, names_cache, series):
         spd, typ, _ = item_history(hist, fac, i, now_dt)
         paid = avg_paid(hist, fac, i, now_dt)
         med = series_median(series, fac, i)
-        sell = cautious(st, typ, paid, med)
+        sell = cautious(st, typ, paid, med, vendor_cap(i, fac))
         back = sell * keep * n if sell else None
         profit = back - cost if back is not None and cost is not None else None
         info = item_info(i, names_cache)
@@ -808,6 +851,7 @@ def lookup_names(api, missing, names_cache, limit=300):
         n += 1
         st, body, _ = api.get(f'/data/wow/item/{i}', ns='static')
         if st == 200 and body:
+            names_cache.setdefault('_sell', {})[str(i)] = body.get('sell_price') or 0     # vendor sell price: deposits
             q = {'POOR': 0, 'COMMON': 1, 'UNCOMMON': 2, 'RARE': 3, 'EPIC': 4, 'LEGENDARY': 5}.get(((body.get('quality') or {}).get('type')), 1)
             names_cache[str(i)] = [body.get('name') or f'Item #{i}', q, (body.get('item_class') or {}).get('name', ''),
                                    (body.get('item_subclass') or {}).get('name', ''), 0]
@@ -889,6 +933,11 @@ def cmd_run(api, args):
         missing = sorted({i for k in houses for i in seen[k] if needs_name(i, names_cache, today)},
                          key=lambda i: (i not in both, i))
         lookup_names(api, missing, names_cache)
+        # vendor sell prices of WoW: Forever items named before deposits were counted (14 Nov), 100 a run
+        sells = names_cache.get('_sell') or {}
+        need_sell = sorted({i for k in houses for i in seen[k] if str(i) not in ITEMS and str(i) not in VENDOR['sell']
+                            and str(i) not in sells and len(names_cache.get(str(i)) or []) == 5})
+        lookup_names(api, need_sell, names_cache, limit=100)
     # analysis
     cuts = CONFIG['cuts']
     result = {'generated': now.isoformat(), 'siteVersion': (os.environ.get('GITHUB_SHA') or 'dev')[:12],

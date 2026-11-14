@@ -12,7 +12,10 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   (`resolve_houses` / `match_scores`, used only if ids are null) needs a `pipeline/fingerprint.json`, which is
   deliberately not in the repo: the earlier one was a stored AHledger sample (their terms forbid keeping data), and
   it could not separate PvP from its look-alike group anyway. Re-verify ids with fresh in-game prices instead.
-- `pipeline/items.json`: item id → [name, quality, class, subclass, randomSuffixGear]. Rebuild with `tools/build_items.py`.
+- `pipeline/items.json`: item id → [name, quality, class, subclass, randomSuffixGear]. Rebuild with `tools/build_items.py`,
+  which also writes `pipeline/vendor.json`: `sell` (vendor sell price → auction deposits) and `gear` (white weapons and
+  armour NPC vendors sell: [vendor price, faction 'A'/'H'/''] → price cap). Forever-only items' sell prices come from
+  Blizzard's item API into `names.json` under `_sell`.
 - `pipeline/recipes.json`: every Classic Engineering recipe (skill, made per craft, reagents, trainer/schematic +
   source, Gnomish/Goblin), the 15 smelting recipes, vendor prices of vendor-sold reagents, bind-on-pickup products.
   Rebuild with `tools/build_recipes.py` (same wow-classic-items package; specialisation ids are hard-coded there).
@@ -52,6 +55,19 @@ python3 -m http.server -d site 8000
   `item.modifiers` (type 28) as a gear variant: it differs per listing. API shows listings only, never sales.
 - Cuts: 5% on faction houses, 15% on Blackwater. Blackwater is shared by Booty Bay, Gadgetzan and Everlook; purchases arrive by mail.
 - Sales are inferred by diffing hourly snapshots (see `diff_sales`). Cancellations can leak in, so treat as estimates.
+  Forever's snapshots are often 2 h apart (20:19, 22:19, 00:19 on 13–14 Nov): above `SHORT_GAP_HOURS` (1.75) only
+  VERY_LONG listings that vanish count as sold (LONG = 2–12 h left may just have expired: ten 10g Short Staffs did).
+- **'Paid' never sets a price alone** (`cautious`): with nothing listed now and no median or typical price, an item has
+  no price (Short Staff showed ×77 from a fake 9g "paid" in the Horde house). `vendor_cap` caps vendor-sold white gear.
+- **Deposits** (`deposit`, `config.json` → `deposit`): 24 h listing = 60% of vendor sell price on faction houses, 300% on
+  Blackwater (Classic rule, which Forever uses), min 1s per listing (Blizzard plans 1c: then set `min_listing` 1),
+  shared by a stack of 20 for stackable classes. Main table: `expected` = profitEach − dep (deposit where you list:
+  home house, or Blackwater when selling there); `marketDay` = sold a day × (price − that house's faction deposit),
+  `marketGross` before it. The chart and top-ten tables use the net `marketDay`.
+- **Rescan button** (header): POSTs workflow_dispatch to the GitHub API with a fine-grained token (Actions: write, this
+  repo only) that the owner pastes once; it lives only in that browser's localStorage (`ft-gh-key`). Without one it
+  links to GitHub's Run workflow page. Never put a token in the repo or the site's code. Long-press/right-click the
+  button for the key dialog. After a dispatch the page polls latest.json for 6 min and reloads when it changes.
 - Thresholds: show if return ≥ ×1.15 and (after warming) profit ≥ 3s a day; "your share" = 25% of estimated daily
   sales where the buyers are; Solid ≥ ×2. Never cut a list to a top N (the owner missed items that way).
 - **Home → Blackwater** (`to_blackwater`): sell = min(½ × other faction's cautious price, cheapest Blackwater listing);

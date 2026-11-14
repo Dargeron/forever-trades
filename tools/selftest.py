@@ -45,7 +45,18 @@ def check_diff_sales():
     assert 4563 not in sold, sold                      # both 20g listings were cancels, not sales
     assert sold.get(2589) == [20, 500], sold           # the vanished Linen Cloth stack was bought
     assert update.cautious({'low': 200000}, None, 498) == 498 and update.cautious(None, None, None) is None
-    print('diff_sales and cautious checks OK')
+    # 2 h between snapshots: a LONG (2-12 h left) listing may simply have expired; VERY_LONG ones still count
+    prev2 = {'5': [2132, 1, 100000, 'LONG'], '6': [2132, 1, 100000, 'LONG'], '7': [2589, 20, 25, 'VERY_LONG']}
+    sold2 = update.diff_sales(prev2, [], 2.0)
+    assert 2132 not in sold2 and sold2.get(2589) == [20, 500], sold2
+    assert 2132 in update.diff_sales(prev2, [], 1.0), 'an hour apart, a vanished LONG listing is a sale'
+    # 'paid' alone (nothing listed, no median, no typical) is not a price; vendor-sold white gear is capped
+    assert update.cautious(None, None, 90918) is None and update.cautious(None, None, 90918, 95000) == 90918
+    assert update.cautious({'low': 100000}, None, None, None, update.vendor_cap(2132, 'horde')) == 96   # Short Staff
+    dep, known = update.deposit(4397, 'faction', {})            # Gnomish Cloaking Device: vendor price 50s
+    assert known and dep == 3000 and update.deposit(4397, 'neutral', {})[0] == 15000, dep
+    assert update.deposit(2589, 'faction', {})[0] == 8 and update.deposit(6948, 'faction', {})[0] == 100   # stack share / 1s floor
+    print('diff_sales, cautious and deposit checks OK')
 
 
 def check_engineering(eng):
@@ -147,11 +158,18 @@ def main():
             o = v['items'][0]
             assert o['mult'] >= 1.15 and o['profitDay'] > 0 and o['back'] > o['buy'], o
             assert all(a['profitDay'] >= b['profitDay'] for a, b in zip(v['items'], v['items'][1:]))
+            for o in v['items']:   # deposits: expected = profit - deposit; market a day after each listing's deposit
+                assert o['dep'] >= 5 and o['expected'] == o['profitEach'] - o['dep'], o
+                price = o['ref'] if k == 'buyHomeSellNeutral' else o['sell']
+                if o['soldDay']:   # (prices are shown rounded to whole copper: allow half a copper per unit sold)
+                    assert abs(o['marketGross'] - o['soldDay'] * price) <= 1 + 0.5 * o['soldDay'], o
+                    assert abs(o['marketDay'] - (o['marketGross'] - o['soldDay'] * o['mktDep'])) <= 2, o
         # home -> Blackwater: sell = min(half the other faction's price, cheapest Blackwater listing)
         v = out['factions'][fac]['buyHomeSellNeutral']
         assert v['refFaction'] == ('horde' if fac == 'alliance' else 'alliance') and v['share'] == 0.5, v.keys()
         for o in v['items']:
             assert o['refPaid'] is None or o['ref'] <= o['refPaid'] + 1, o   # never above what buyers paid
+            assert o['refLow'] or o['refMed'] or o['refTyp'], o              # never priced on 'paid' alone
             assert abs(o['half'] - o['ref'] * 0.5) <= 1, o
             assert o['sell'] <= o['half'] + 1 and (o['dstLow'] is None or o['sell'] <= o['dstLow']), o
             assert (o['sell'] == o['dstLow']) if o['undercut'] else abs(o['sell'] - o['half']) <= 1, o

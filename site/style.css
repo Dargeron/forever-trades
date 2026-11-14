@@ -100,6 +100,20 @@ b { color: var(--ink); }
 .lede { margin: 10px auto 4px; color: var(--ink-2); max-width: 64ch; }
 .fresh { margin: 0; font-size: 13px; color: var(--ink-3); }
 .fresh b { color: var(--ink-2); font-weight: 600; }
+.rescan-row { margin: 6px 0 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; font-size: 12.5px; color: var(--ink-3); }
+.rescan-btn {
+  appearance: none; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--head);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel-3)); border: 1px solid var(--edge); border-radius: 999px; padding: 4px 12px; min-height: 32px;
+}
+.rescan-btn:hover { box-shadow: inset 0 0 0 1px var(--trim); }
+.rescan-btn:disabled { opacity: .6; cursor: wait; }
+.rescan-status:empty { display: none; }
+.rescan-setup ol { margin: 6px 0; padding-left: 20px; color: var(--ink-2); }
+.rescan-setup li { margin: 3px 0; }
+.rescan-setup a.copy { display: inline-block; text-decoration: none; }
+.key-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.key-row input { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--panel-3); border: 1px solid var(--edge); border-radius: 8px; padding: 7px 10px; min-height: 40px; }
+.key-row .copy { margin-top: 0; }
 
 /* page tabs: auction trades | engineering */
 .tabs { display: flex; justify-content: center; gap: 6px; margin: 16px 0 0; border-bottom: 1px solid var(--edge); }
@@ -227,6 +241,7 @@ tr.details-row > td { background: var(--panel-3); padding: 10px 12px 12px; }
 }
 .grid th[aria-sort="ascending"] .th-arrow, .grid th[aria-sort="descending"] .th-arrow { opacity: 1; color: var(--gold); font-size: 10px; }
 .lo { font-weight: 750; }
+.grid td.neg .money, .flag.neg .money { color: var(--warn); }
 .more { appearance: none; width: 100%; margin-top: 10px; background: linear-gradient(180deg, var(--panel-2), var(--panel-3)); color: var(--head); border: 1px solid var(--edge); border-radius: 10px; padding: 10px; font: inherit; font-weight: 700; cursor: pointer; }
 .more:hover { box-shadow: inset 0 0 0 1px var(--trim); }
 

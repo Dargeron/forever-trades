@@ -21,6 +21,7 @@
     <h1>Forever Trades</h1>
     <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater. Prices come from Blizzard every hour.</p>
     <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
+    <p class="rescan-row"><button type="button" class="rescan-btn" id="rescan" title="Ask Blizzard for its newest prices and rebuild the site"><span aria-hidden="true">↻</span> Rescan now</button><span class="rescan-status" id="rescan-status" aria-live="polite"></span></p>
   </header>
 
   <div class="tabs" role="tablist" aria-label="Pages">
@@ -58,6 +59,7 @@
             <option value="marketDay">Market a day</option>
             <option value="soldDay">Sold a day</option>
             <option value="profitEach">Profit per item</option>
+            <option value="expected">Expected profit (after deposit)</option>
             <option value="buy">Buy price</option>
             <option value="sell">Sell price</option>
             <option value="name">Name</option>
@@ -74,7 +76,8 @@
               <th class="num hide-s" scope="col" data-sort="buy">Buy</th>
               <th class="num hide-s" scope="col" data-sort="sell">Sell</th>
               <th class="num c-ret" scope="col" data-sort="mult" title="What you get back for each 1g you spend, after the auction cut">Back per 1g</th>
-              <th class="num hide-s" scope="col" data-sort="marketDay" title="Gold changing hands for this item each day where your buyers are">Market a day</th>
+              <th class="num hide-s" scope="col" data-sort="expected" title="Profit per item after the 24-hour auction deposit, counted as if it were never returned (it is lost when an item doesn't sell)">Expected profit (each, after deposit)</th>
+              <th class="num hide-s" scope="col" data-sort="marketDay" title="Gold changing hands for this item each day where your buyers are, minus the deposit to list each one">Market a day</th>
               <th class="num hide-m" scope="col" data-sort="soldDay">Sold a day</th>
               <th class="c-bar" scope="col" data-sort="profitDay" id="th-bar">Profit a day</th>
             </tr>
@@ -180,10 +183,11 @@
           <li><b>Sell</b>, selling on Blackwater: <b>half the other faction's price</b>. Almost nobody buys on Blackwater to use the item; your buyers are traders from the other faction who resell it in their own house, and they need a profit too. If someone already sells the item on Blackwater for less than that, you can only match the cheapest Blackwater listing. Blackwater's own asking prices are otherwise ignored, because they are often far too high.</li>
           <li><b>Back per 1g</b>: what you get back for each gold you spend, after the cut (<b>5%</b> on your faction's house, <b>15%</b> on Blackwater). ×2 means you double your gold. <b>Solid</b> is ×2 or more; <b>Fair</b> is ×1.15 to ×2.</li>
           <li><b>Sold a day</b>: how many units we saw sell where your buyers are, averaged over up to 7 days, always in a faction auction house, never on Blackwater: your own faction's house when you sell at home, the other faction's house when you sell on Blackwater (your Blackwater buyers resell there). The column heading names the house, e.g. “Sold a day (Horde AH)”.</li>
-          <li><b>Market a day</b>: sold a day × the price, so how much gold changes hands for that item each day.</li>
+          <li><b>Market a day</b>: sold a day × (the price − the deposit to list one), so how much gold changes hands for that item each day after deposits.</li>
+          <li><b>Expected profit (each, after deposit)</b>: the profit per item minus the auction deposit, counted as if you never got it back. You pay a deposit to list anything; it comes back when the item sells, and is lost if it expires or you cancel. It is a share of the item's vendor sell price for a 24-hour listing: 60% in your faction's house, 300% on Blackwater, and at least 1 silver per listing (shared by a stack of 20 for trade goods). Gear and recipes with a high vendor price can cost more to list than they earn: those show a loss here.</li>
           <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market. <b>Profit a day</b> is your share × the profit on each item.</li>
           <li><b>Busiest on Blackwater</b>: items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house, by gold changing hands each day. <b>Resell in</b> shows where, and what each 1g spent on Blackwater today (its cheapest listing; what buyers paid if none is listed) brings back there after the 5% cut. Items that cost more on Blackwater than either house pays are left out: those are mostly players moving goods between their own characters.</li>
-          <li><b>Spike protection</b>: a selling price is never taken above the item's 3-day median price, its 7-day typical price or what buyers actually paid, so a few silly listings left after the cheap ones sold can't make a trade look good.</li>
+          <li><b>Spike protection</b>: a selling price is never taken above the item's 3-day median price, its 7-day typical price or what buyers actually paid, so a few silly listings left after the cheap ones sold can't make a trade look good. What buyers paid is itself worked out from listings that disappeared, so it never sets a price on its own: an item with nothing listed now and no median or typical price yet is left out. White weapons and armour that NPC vendors sell are never priced above the vendor price.</li>
           <li><b>Price history</b>: open any item to see a graph of its cheapest price in each house, hour by hour, with the 3-day median, the cheapest of the last 7 days and since tracking began. The history starts on 13 Nov 2026 and grows with every snapshot.</li>
           <li><b>Details</b>: tap any item, in any table, the chart or the summary, to see everything about it: prices in each house, what buyers actually paid, how many sell a day, your share and the profit.</li>
           <li><b>Sorting</b>: tap a column heading to sort by it; tap it again to flip the order. The arrow shows which column and which way.</li>
@@ -195,7 +199,7 @@
       <details>
         <summary>Where the data comes from</summary>
         <p>Every hour a free GitHub job reads the EU PvP Alliance, Horde and Blackwater auction houses from Blizzard's official Battle.net API. The API only shows what's listed, not what sold. We work out sales by comparing each snapshot with the one an hour earlier. A listing that disappears with 2+ hours left counts as sold, unless it looks like a cancel-and-relist or a cheaper listing of the same item is still there. Some cancellations will still slip through, so treat "sold a day" as an estimate. The first figures appear after one hourly comparison and settle over a day or two.</p>
-        <p>Not included: auction deposits (you lose them if an item doesn't sell, and Blackwater's are higher), and travel or mail time. Purchases on Blackwater arrive by mail.</p>
+        <p>Auction deposits are counted in the expected-profit column and in market a day (as if you lost each deposit), not in profit a day or the shopping list. Travel and mail time aren't counted. Purchases on Blackwater arrive by mail.</p>
       </details>
       <details>
         <summary>Safety</summary>

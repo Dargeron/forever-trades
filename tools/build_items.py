@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Build pipeline/items.json (id -> [name, quality, class, subclass, random_suffix_gear]).
+"""Build pipeline/items.json (id -> [name, quality, class, subclass, random_suffix_gear]) and
+pipeline/vendor.json: {"sell": {id: vendor sell price}, "gear": {id: [vendor buy price, faction]}}.
+The sell price sets the auction deposit; "gear" lists white weapons and armour that NPC vendors
+sell (faction "A", "H" or "" for both), so nobody pays more than that for them on an auction house.
 
 Source: the MIT-licensed npm package wow-classic-items (Classic item database),
 plus names of items added in WoW: Forever. Unknown ids are filled at run time by
@@ -10,6 +13,7 @@ import io, json, os, tarfile, urllib.request
 
 URL = 'https://registry.npmjs.org/wow-classic-items/-/wow-classic-items-2.0.1.tgz'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'pipeline', 'items.json')
+VENDOR_OUT = os.path.join(os.path.dirname(OUT), 'vendor.json')
 QUALITY = {'Poor': 0, 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5, 'Artifact': 6, 'Heirloom': 7}
 
 # Items added in WoW: Forever (not in the Classic database). Names checked on public item pages.
@@ -47,6 +51,16 @@ def main():
     with open(OUT, 'w') as f:
         json.dump(out, f, separators=(',', ':'), ensure_ascii=False)
     print(len(out), 'items written to', os.path.normpath(OUT))
+    sell = {str(x['itemId']): x['sellPrice'] for x in data if x.get('sellPrice')}
+    gear = {}
+    for x in data:
+        src = x.get('source') or {}
+        if x.get('vendorPrice') and x.get('class') in ('Weapon', 'Armor') and x.get('quality') in ('Poor', 'Common'):
+            fac = src.get('faction') if src.get('category') == 'Vendor' else None
+            gear[str(x['itemId'])] = [x['vendorPrice'], {'Alliance': 'A', 'Horde': 'H'}.get(fac, '')]
+    with open(VENDOR_OUT, 'w') as f:
+        json.dump({'sell': sell, 'gear': gear}, f, separators=(',', ':'))
+    print(len(sell), 'vendor sell prices and', len(gear), 'vendor-sold white gear prices ->', os.path.normpath(VENDOR_OUT))
 
 
 if __name__ == '__main__':

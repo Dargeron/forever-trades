@@ -472,5 +472,17 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   Mithril Frag Bombs. Making Gyrochronatoms, Iron Struts, Bronze Tubes and Whirring Bronze Gizmos was cheaper
   than buying them.
 - **Chart across switch**: market a day or sale price (see CLAUDE.md).
+- **Fake Horde prices again (Short Staff ×77, Ragged Leather Belt ×106)**, owner's report. Ten 10g Short Staffs
+  left the Horde house between the 22:19 and 00:19 snapshots and counted as sold (LONG listings, 2 h gap: they may
+  have expired), so "paid" was 9g with nothing listed and no median yet. Fixes: only VERY_LONG vanishings count when
+  snapshots are more than 1.75 h apart; "paid" never sets a price alone; vendor-sold white gear is capped at the
+  vendor price. On the 00:19 data this removed 11 Alliance→Blackwater lines (Short Staff, Ragged Leather Belt,
+  Frostmane Leather Vest, Foamspittle Staff…) and a few others; real gaps such as cooking recipes stayed.
+- **Deposits** (owner's request): "Expected profit (each, after deposit)" column, deposit as if lost; market a day
+  after deposits. Forever uses the Classic deposit rule (5/20/60% of vendor sell price for 2/8/24 h, ×5 on neutral
+  houses; Icy Veins, Wowhead, ConquestCapped, Nov 2026); minimum 1s per listing until Blizzard's planned cut to 1c.
+  On 00:19 data 11 Alliance and 25 Alliance→Blackwater lines lose money if the deposit is lost (e.g. Eight of
+  Portals: 3g75s Blackwater deposit for a 52s profit).
+- **Rescan now** button (owner's request); see CLAUDE.md. The first manual rescan picked up the 01:19 snapshot.
 - **Dot size = sale price of one item** (owner's request; was profit a day). Log-scaled: chart prices ran from 10c to
   750g, so a strictly proportional size would leave nearly every dot a pinpoint. A key under the chart shows sample sizes.

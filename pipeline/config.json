@@ -12,5 +12,12 @@
     "neutral": 0.15
   },
   "other_faction_share": 0.5,
-  "_other_faction_share": "Selling on Blackwater: list at this share of the other faction's price, so their traders can still resell at a profit (or match a cheaper Blackwater listing)."
+  "_other_faction_share": "Selling on Blackwater: list at this share of the other faction's price, so their traders can still resell at a profit (or match a cheaper Blackwater listing).",
+  "deposit": {
+    "faction": 0.6,
+    "neutral": 3.0,
+    "min_listing": 100,
+    "stack": 20,
+    "note": "Auction deposit for a 24 h listing as a share of the vendor sell price (Classic rule, used by WoW: Forever: 5%/20%/60% for 2/8/24 h on faction houses, five times that on Blackwater), at least min_listing copper per listing (1s; Blizzard plans to cut it to 1c: then set 1), shared by a stack of `stack` for stackable goods. Lost if the item does not sell."
+  }
 }
