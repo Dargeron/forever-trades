@@ -13,11 +13,17 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   deliberately not in the repo: the earlier one was a stored AHledger sample (their terms forbid keeping data), and
   it could not separate PvP from its look-alike group anyway. Re-verify ids with fresh in-game prices instead.
 - `pipeline/items.json`: item id → [name, quality, class, subclass, randomSuffixGear]. Rebuild with `tools/build_items.py`.
+- `pipeline/recipes.json`: every Classic Engineering recipe (skill, made per craft, reagents, trainer/schematic +
+  source, Gnomish/Goblin), the 15 smelting recipes, vendor prices of vendor-sold reagents, bind-on-pickup products.
+  Rebuild with `tools/build_recipes.py` (same wow-classic-items package; specialisation ids are hard-coded there).
 - `site/`: `index.html`, `style.css`, `app.js` (vanilla JS, no dependencies; Cinzel from Google Fonts). Reads
   `site/data/latest.json`. WoW look: dark leather/gold (parchment in light mode), quality-coloured names, coin colours.
   Sections: ranked table, return-vs-market chart, ten biggest markets/returns, shopping list, busiest on Blackwater.
-- `.github/workflows/update.yml`: checks at :08/:28/:48 (Blizzard's hourly snapshot is stamped ~:25 but published 15–20+
-  min later; a check with nothing new exits in seconds), plus push to main, plus manual. Restores and saves history on the
+  Two tabs: "Auction trades" and "Engineering" (`#engineering`, loads `data/engineering.json` when opened).
+- `.github/workflows/update.yml`: checks at :09/:29/:49 (Blizzard's hourly snapshot is stamped ~:25 but published 15–20+
+  min later; a check with nothing new exits in seconds), plus push to main, plus manual. GitHub's schedule had never
+  fired as of 14 Nov 2026, so an hourly Claude scheduled task in the owner's account starts the workflow by hand at
+  :53 (force false) unless a scheduled run succeeded in the last 70 minutes. Restores and saves history on the
   `state` branch (force-pushed single commit), deploys Pages via artifact. `probe.yml`: manual house listing.
 - `tools/selftest.py`: 9 simulated hours, offline. Run after any pipeline change.
 
@@ -77,6 +83,15 @@ python3 -m http.server -d site 8000
 - Every item is clickable everywhere: table rows expand (`expandable`), chart dots and tile names open a card
   (`openModal`). Details panels are built on first open, so no history file loads with the page.
 - Money display: g/s/c; coppers only under 10s; 10s and up rounded to silver; 100g+ shows gold only.
+- **Engineering** (`material_costs` / `engineering` in update.py, owner's request, skill 220 by default): per recipe and
+  faction, one craft's materials at the cheapest of: buying in that house (`walk` up the listings for the amount;
+  median/typical if none listed, marked `recent`), the vendor price, or making it (smelting/engineering parts,
+  recursively, no cycles). Sell = cautious price in that house (kept to 2 decimals: ammo is a few copper, 200 a
+  craft); profit per craft = n × sell × 0.95 − cost; profit a day = profit / n × 25% of sold a day. BoP products
+  are left out; Mining skill for smelting is assumed. Rows carry the full material tree (`parts`, nodes `i, qty,
+  how, c, ah, v, mk, p...`); names of materials are in `names`. The site filters by skill/schematic/specialisation.
+- Chart "Across" switch: market a day (default, the owner's original spec) or sale price; remembered. The owner once
+  read market a day as price (a 2g pattern selling 21/day sat right of a 5g one selling 5/day).
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 
 ## Conventions

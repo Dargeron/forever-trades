@@ -23,18 +23,23 @@
     <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
   </header>
 
+  <div class="tabs" role="tablist" aria-label="Pages">
+    <button type="button" role="tab" class="tab" id="tab-trade" data-tab="trade" aria-controls="trade-view">Auction trades</button>
+    <button type="button" role="tab" class="tab" id="tab-eng" data-tab="eng" aria-controls="eng-view">Engineering</button>
+  </div>
+
   <nav class="controls" aria-label="Choose your side and trade direction">
     <div class="seg faction" role="radiogroup" aria-label="Your faction">
       <button type="button" role="radio" data-faction="alliance" class="seg-btn">Alliance</button>
       <button type="button" role="radio" data-faction="horde" class="seg-btn">Horde</button>
     </div>
-    <div class="seg dir" role="radiogroup" aria-label="Trade direction">
+    <div class="seg dir" id="dir-seg" role="radiogroup" aria-label="Trade direction">
       <button type="button" role="radio" data-dir="buyNeutralSellHome" class="seg-btn wide"><span class="dir-a">Buy on Blackwater</span><span class="arrow" aria-hidden="true">→</span><span class="dir-b home-name">sell at home</span></button>
       <button type="button" role="radio" data-dir="buyHomeSellNeutral" class="seg-btn wide"><span class="dir-a home-name-buy">Buy at home</span><span class="arrow" aria-hidden="true">→</span><span class="dir-b">sell on Blackwater</span></button>
     </div>
   </nav>
 
-  <main>
+  <main id="trade-view" role="tabpanel" aria-labelledby="tab-trade">
     <p class="explain" id="explain"></p>
     <div class="banner" id="banner" hidden></div>
 
@@ -81,9 +86,17 @@
     </section>
 
     <section class="card" id="scatter-card">
-      <h2>Return against market size</h2>
-      <p class="sub">Every item we have seen selling. Up means more money back for each gold you spend; right means more gold changes hands each day. Top-right is best. Hover or tap a dot to see the item.</p>
-      <div class="search-row chart-search"><input id="chart-search" type="search" placeholder="Show only items containing… (e.g. recipe)" aria-label="Show only items whose name contains this text"><span class="chart-count" id="chart-count" aria-live="polite"></span></div>
+      <h2 id="scatter-title">Return against market size</h2>
+      <p class="sub" id="scatter-sub">Every item we have seen selling. Up means more money back for each gold you spend; right means more gold changes hands each day. Top-right is best. Hover or tap a dot to see the item.</p>
+      <div class="search-row chart-search">
+        <label class="sort">Across
+          <select id="chart-x" aria-label="What the horizontal axis shows">
+            <option value="market">Market a day</option>
+            <option value="price">Sale price</option>
+          </select>
+        </label>
+        <input id="chart-search" type="search" placeholder="Show only items containing… (e.g. recipe)" aria-label="Show only items whose name contains this text"><span class="chart-count" id="chart-count" aria-live="polite"></span>
+      </div>
       <div class="scatter-wrap" id="scatter-wrap">
         <svg id="scatter" role="img" aria-label="Chart of return against market size, one dot per item"></svg>
       </div>
@@ -174,6 +187,7 @@
           <li><b>Price history</b>: open any item to see a graph of its cheapest price in each house, hour by hour, with the 3-day median, the cheapest of the last 7 days and since tracking began. The history starts on 13 Nov 2026 and grows with every snapshot.</li>
           <li><b>Details</b>: tap any item, in any table, the chart or the summary, to see everything about it: prices in each house, what buyers actually paid, how many sell a day, your share and the profit.</li>
           <li><b>Sorting</b>: tap a column heading to sort by it; tap it again to flip the order. The arrow shows which column and which way.</li>
+          <li><b>Chart, across</b>: by default the chart spreads items by <b>market a day</b>, the gold that changes hands for them each day, so a cheap item that sells often can sit to the right of a dear one that rarely sells. Choose <b>Sale price</b> to spread them by what one sells for instead.</li>
           <li><b>Chart search</b>: type part of a name above the chart (for example “recipe”) to show and label only the items that contain it. The chart keeps its scale, so every dot stays exactly where it was; the others just disappear.</li>
         </ul>
       </details>
@@ -189,8 +203,82 @@
     </section>
   </main>
 
+  <main id="eng-view" role="tabpanel" aria-labelledby="tab-eng" hidden>
+    <p class="explain" id="eng-explain"></p>
+    <div class="banner" id="eng-banner" hidden></div>
+
+    <section class="tiles" id="eng-tiles" aria-label="Engineering summary"></section>
+
+    <section class="card" id="eng-card">
+      <div class="card-head">
+        <div>
+          <h2 id="eng-title">Engineering recipes</h2>
+          <p class="sub" id="eng-sub"></p>
+        </div>
+      </div>
+      <div class="filters">
+        <label class="sort">Your skill <input id="eng-skill" type="number" min="1" max="300" step="1" value="220" inputmode="numeric"></label>
+        <label class="sort">Recipes
+          <select id="eng-learn">
+            <option value="all">Trainer and schematics</option>
+            <option value="trainer">Trainer only</option>
+          </select>
+        </label>
+        <label class="sort">Specialisation
+          <select id="eng-school">
+            <option value="any">Gnomish and Goblin</option>
+            <option value="gnomish">Gnomish</option>
+            <option value="goblin">Goblin</option>
+            <option value="none">Neither</option>
+          </select>
+        </label>
+      </div>
+      <div class="search-row"><input id="eng-search" type="search" placeholder="Find a recipe…" aria-label="Find an engineering recipe"></div>
+      <div class="table-wrap">
+        <table class="grid rank eng">
+          <thead>
+            <tr>
+              <th class="c-rank" scope="col">#</th>
+              <th class="c-item" scope="col" data-sort="name">Item</th>
+              <th class="num hide-l" scope="col" data-sort="skill">Skill</th>
+              <th class="num hide-s" scope="col" data-sort="cost" title="What the materials for one craft cost, buying, smelting or making each the cheapest way">Materials (one craft)</th>
+              <th class="num hide-s" scope="col" data-sort="sell" title="What one item sells for in your faction's house (spike-protected)">Sells for (each)</th>
+              <th class="num c-ret" scope="col" data-sort="mult" title="What you get back for each 1g spent on materials, after the auction cut">Back per 1g</th>
+              <th class="num hide-m" scope="col" data-sort="soldDay">Sold a day</th>
+              <th class="c-bar" scope="col" data-sort="profit">Profit per craft</th>
+              <th class="num hide-t" scope="col" data-sort="profitDay" title="Your share (a quarter of what sells a day) × the profit">Profit a day</th>
+            </tr>
+          </thead>
+          <tbody id="eng-body"></tbody>
+        </table>
+      </div>
+      <button type="button" class="more" id="eng-more" hidden></button>
+    </section>
+
+    <section class="card help">
+      <h2>How this is worked out</h2>
+      <details open>
+        <summary>Materials</summary>
+        <ul>
+          <li>For every material we take the <b>cheapest way to get it</b> on your side: buy it in your faction's auction house (walking up from the cheapest listing for the amount one craft needs), buy it from a vendor (Weak Flux, Coal, stocks, Engineer's Ink…), or <b>make it</b>: smelt ore into bars (Bronze from Copper and Tin, Steel from Iron and Coal) and make the parts yourself (bolts, tubes, gizmos, blasting powder, Gold Power Cores, Gyrochronatoms…). Open a recipe to see which way was chosen for each material, and what the other ways would cost.</li>
+          <li>Smelting assumes you have the Mining skill for it (Bronze 65, Iron 125, Gold 155, Steel 165, Mithril 175, Truesilver 230). Parts are made only when making them is cheaper than buying them.</li>
+          <li>When a material isn't listed right now, its recent price (3-day median or 7-day typical) is used and marked “recent”.</li>
+        </ul>
+      </details>
+      <details>
+        <summary>Selling</summary>
+        <ul>
+          <li><b>Sells for</b> is the item's cautious price in your faction's house: the cheapest listing now, or its 3-day median, 7-day typical price or what buyers paid if any of those is lower. <b>Profit per craft</b> is everything one craft makes (some recipes make 2 to 200) times that price, minus the 5% auction cut, minus the materials. Auction deposits aren't counted.</li>
+          <li><b>Sold a day</b> is worked out from the hourly snapshots, like everywhere on this site, and is an estimate. <b>Profit a day</b> assumes you sell a quarter of that.</li>
+          <li>A recipe with a big profit per craft but almost no sales may take a long time to sell. Recipes that lose money are listed too, at the bottom, and items that bind when picked up are left out (they can't be sold).</li>
+          <li><b>Skill</b> is the Engineering skill a recipe needs. Schematics have to be found or bought first; Gnomish and Goblin recipes need that specialisation.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
   <footer>
-    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. A fan-made tool, not affiliated with or endorsed by Blizzard Entertainment.</p>
+    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names and recipes from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. A fan-made tool, not affiliated with or endorsed by Blizzard Entertainment.</p>
   </footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>

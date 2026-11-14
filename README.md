@@ -14,6 +14,11 @@ with a return-vs-market-size chart (with a name filter, e.g. "recipe"), the ten 
 list for a chosen budget, and the busiest items on Blackwater that can be resold at
 a profit in the Alliance or Horde house.
 
+An **Engineering** tab (`#engineering`) works out, for every Engineering recipe, what one craft's
+materials cost the cheapest way (buy in your faction's house, buy from a vendor, or smelt ore and make
+the parts yourself) against what the item sells for there after the 5% cut, filtered by your skill
+(220 by default), schematics and Gnomish/Goblin specialisation.
+
 ## How it updates
 
 `.github/workflows/update.yml` runs every hour on GitHub Actions (free for public
@@ -27,7 +32,7 @@ repositories):
    same item is still up.
 3. Keeps 14 days of history on the `state` branch (overwritten each hour, so the
    repository stays small).
-4. Writes `site/data/latest.json` and publishes `site/` to GitHub Pages.
+4. Writes `site/data/latest.json` and `site/data/engineering.json` and publishes `site/` to GitHub Pages.
 
 If Blizzard has not published a new snapshot, the run stops early and nothing is
 redeployed.
@@ -49,6 +54,7 @@ Run **Update prices** from the Actions tab at any time to refresh by hand.
 
 ```bash
 python3 tools/build_items.py   # rebuilds pipeline/items.json from the wow-classic-items npm package
+python3 tools/build_recipes.py # rebuilds pipeline/recipes.json (Engineering + smelting recipes, vendor prices)
 python3 tools/selftest.py      # 9 simulated hours through the pipeline, no network needed
 ```
 
@@ -90,10 +96,17 @@ Only the Python standard library is used.
   Blackwater. "Resell in" shows the house and that ratio. Items dearer on Blackwater than both houses pay
   are left out (mostly players moving goods between their own characters); the site states how many and
   how much gold a day they were.
+- **Engineering**: materials per craft = for each reagent, the cheapest of its auction-house price
+  (walking up the listings for the amount needed; its recent median if none is listed), its vendor price,
+  or making it (smelting, engineering parts), recursively. Sells for = the item's cautious price in your
+  house; profit per craft = made per craft × that × 0.95 − materials. Bind-on-pickup products are left
+  out. Smelting assumes the Mining skill. Recipes come from wow-classic-items (Classic data).
+- **Chart, across**: market a day (default) or the sale price of one item. Market a day = sold a day ×
+  price, so a cheap item that sells often sits right of a dear one that rarely sells.
 - Deposits are not included.
 
 ## Credits
 
-Prices: Blizzard Battle.net API. Item names: [wow-classic-items](https://github.com/Nakroma/wow-classic-items)
+Prices: Blizzard Battle.net API. Item names and recipes: [wow-classic-items](https://github.com/Nakroma/wow-classic-items)
 (MIT, © Nakroma) plus Blizzard's item API. Not affiliated with or endorsed by Blizzard Entertainment.
 World of Warcraft and Blizzard Entertainment are trademarks of Blizzard Entertainment, Inc.

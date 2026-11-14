@@ -22,6 +22,7 @@ from email.utils import parsedate_to_datetime, format_datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.environ.get('FT_CONFIG') or os.path.join(HERE, 'config.json')))
 ITEMS = json.load(open(os.path.join(HERE, 'items.json')))
+RECIPES = json.load(open(os.path.join(HERE, 'recipes.json')))     # tools/build_recipes.py
 
 TOKEN_URL = 'https://oauth.battle.net/token'
 TL_SAFE_SHORT_GAP = {'LONG', 'VERY_LONG'}      # can't expire within ~2 h
@@ -603,6 +604,108 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
     return finish(out, warming), warming, hours
 
 
+# --------------------------------------------------------------------------- engineering
+def material_costs(fac, stats, hist, now_dt, series, names_cache):
+    """Returns node(item, qty): the cheapest way to get `qty` of an item for a crafter on `fac`'s side.
+    The options are buying it in that house (walking up its listings, or its recent price if none is
+    listed now), buying it from a vendor, or making it: smelting ore into bars, or engineering parts
+    (bolts, tubes, gizmos, powder, cores...) from their own materials, recursively."""
+    makers = {}
+    for c in RECIPES['crafts']:
+        makers.setdefault(c['id'], []).append(c)
+    vendor = {int(k): v for k, v in RECIPES['vendor'].items()}
+
+    def ah_price(i, qty):
+        s = stats.get(i)
+        if s:
+            avg, got = walk(s['ladder'], max(1, math.ceil(qty - 1e-9)))
+            return avg, got < qty, False
+        rec = series_median(series, fac, i) or item_history(hist, fac, i, now_dt)[1]
+        return (rec, False, True) if rec else (None, False, False)
+
+    def node(i, qty, stack=frozenset()):
+        out = {'i': i, 'qty': round(qty, 3)}
+        ah, short, recent = ah_price(i, qty)
+        opts = []
+        if ah:
+            out['ah'] = int(round(ah))
+            if short: out['short'] = True
+            if recent: out['recent'] = True
+            opts.append((ah * qty, 'ah', None))
+        if i in vendor:
+            out['v'] = vendor[i]
+            opts.append((vendor[i] * qty, 'vendor', None))
+        best_make = None
+        if len(stack) < 6:
+            for c in makers.get(i, []):
+                crafts = qty / c['n']
+                parts = [node(r, q * crafts, stack | {i}) for r, q in c['r'] if r not in stack]
+                if len(parts) < len(c['r']) or any(p['c'] is None for p in parts):
+                    continue
+                total = sum(p['c'] for p in parts)
+                if best_make is None or total < best_make[0]:
+                    best_make = (total, c, parts)
+        if best_make:
+            total, c, parts = best_make
+            out['mk'] = int(round(total / qty))
+            opts.append((total, 'make', (c, parts)))
+        if not opts:
+            out.update(how='none', c=None)
+            return out
+        total, how, made = min(opts, key=lambda o: o[0])
+        out.update(how=how, c=int(round(total)))
+        if made:
+            c, parts = made
+            out.update(by=c['prof'], n=c['n'], crafts=round(qty / c['n'], 3), p=parts)
+        return out
+    return node
+
+
+def engineering(fac, data, hist, now_dt, names_cache, series):
+    """Every Engineering recipe for a crafter on `fac`'s side: what one craft's materials cost at the
+    cheapest of buying, vendor and making them (see material_costs), against what the item sells for
+    in that house (cautious price, after its 5% cut), and how many sell there a day. Items that bind
+    when picked up can't be sold and are left out."""
+    stats = data[fac]['stats']
+    keep = 1 - CONFIG['cuts']['faction']
+    node = material_costs(fac, stats, hist, now_dt, series, names_cache)
+    bop = set(RECIPES['bop'])
+    out = []
+    for c in RECIPES['crafts']:
+        if c['prof'] != 'eng' or c['id'] in bop:
+            continue
+        i, n = c['id'], c['n']
+        parts = [node(r, q, frozenset({i})) for r, q in c['r']]
+        missing = [item_info(p['i'], names_cache)[0] for p in parts if p['c'] is None]
+        cost = None if missing else sum(p['c'] for p in parts)
+        st = stats.get(i)
+        spd, typ, _ = item_history(hist, fac, i, now_dt)
+        paid = avg_paid(hist, fac, i, now_dt)
+        med = series_median(series, fac, i)
+        sell = cautious(st, typ, paid, med)
+        back = sell * keep * n if sell else None
+        profit = back - cost if back is not None and cost is not None else None
+        info = item_info(i, names_cache)
+        out.append(dict(
+            id=i, name=info[0], q=info[1], skill=c['skill'], n=n, learn=c['learn'], how=c['how'], school=c['school'],
+            cost=cost, sell=round(sell, 2) if sell else None, back=int(round(back)) if back else None,     # ammo: a few copper each
+            profit=int(round(profit)) if profit is not None else None,
+            mult=round(back / cost, 3) if back and cost else None,
+            low=st['low'] if st else None, qty=st['qty'] if st else 0, paid=int(round(paid)) if paid else None,
+            med=med, typ=int(typ) if typ else None, soldDay=round(spd, 2) if spd is not None else None,
+            profitDay=int(round(profit / n * 0.25 * spd)) if profit and profit > 0 and spd else None,
+            marketDay=int(round(spd * sell)) if spd and sell else None,
+            missing=missing, parts=parts))
+    out.sort(key=lambda o: -(o['profit'] if o['profit'] is not None else -1e15))
+    return out
+
+
+def node_ids(nodes):
+    for p in nodes:
+        yield p['i']
+        yield from node_ids(p.get('p') or [])
+
+
 # --------------------------------------------------------------------------- commands
 def match_scores(api):
     """Score every auction house against an EU PvP fingerprint (pipeline/fingerprint.json:
@@ -811,11 +914,23 @@ def cmd_run(api, args):
     top, top_hours, hidden = busiest(hist, 'neutral', data, now, names_cache, series)
     result['neutralTop'] = {'salesHours': round(top_hours, 1), 'items': top,
                             'hiddenItems': hidden['items'], 'hiddenGold': hidden['gold']}
+    # Engineering tab: loaded by the site only when the tab is opened
+    eng = {'generated': result['generated'], 'share': 0.25, 'factions': {}}
+    for fac in ('alliance', 'horde'):
+        eng['factions'][fac] = {'salesHours': round(item_history(hist, fac, -1, now)[2], 1),
+                                'items': engineering(fac, data, hist, now, names_cache, series)}
     os.makedirs(args.out, exist_ok=True)
     jsave(os.path.join(args.out, 'latest.json'), result)
     seed_alltime(alltime, hist)
     # one small price-history file per listed item, loaded by the site when the item is opened
     ids = {o['id'] for f in result['factions'].values() for v in f.values() for o in v['items']} | {o['id'] for o in top}
+    mats = set()
+    for f in eng['factions'].values():
+        for o in f['items']:
+            mats.update(node_ids(o['parts']))
+    eng['names'] = {str(i): item_info(i, names_cache)[:2] for i in sorted(mats)}     # materials' names and quality
+    jsave(os.path.join(args.out, 'engineering.json'), eng)
+    ids |= mats | {o['id'] for f in eng['factions'].values() for o in f['items']}
     sdir = os.path.join(args.out, 'series')
     os.makedirs(sdir, exist_ok=True)
     for i in ids:

@@ -48,6 +48,36 @@ def check_diff_sales():
     print('diff_sales and cautious checks OK')
 
 
+def check_engineering(eng):
+    """Each recipe's materials cost what its parts add up to, each part costs the cheapest of its
+    options (auction house, vendor, making it), and the profit is the sale after the 5% cut minus that."""
+    def check_node(p):
+        opts = [x for x in ((p['ah'] * p['qty']) if p.get('ah') else None, (p['v'] * p['qty']) if p.get('v') else None,
+                             (p['mk'] * p['qty']) if p.get('mk') else None) if x is not None]
+        if p['how'] == 'none':
+            assert not opts and p['c'] is None, p
+            return
+        assert p['c'] <= min(opts) + 1 + p['qty'], p          # the chosen way is the cheapest (whole-copper rounding)
+        if p['how'] == 'make':
+            assert abs(sum(k['c'] for k in p['p']) - p['c']) <= len(p['p']), p
+            for k in p['p']:
+                check_node(k)
+    n = 0
+    for fac, f in eng['factions'].items():
+        for o in f['items']:
+            assert o['id'] not in (10542, 10543, 10545, 10587, 10645, 10725, 10727), o['name']   # bind on pickup: never listed
+            for p in o['parts']:
+                check_node(p)
+            if o['cost'] is not None:
+                assert o['cost'] == sum(p['c'] for p in o['parts']), o['name']
+            if o['profit'] is not None:
+                assert abs(o['back'] - o['sell'] * 0.95 * o['n']) <= 1 + 0.01 * o['n'] and abs(o['profit'] - (o['back'] - o['cost'])) <= 1, o['name']
+                n += 1
+            assert (o['profitDay'] is None) or (o['profit'] > 0 and o['soldDay']), o['name']
+    priced = sum(1 for o in eng['factions']['alliance']['items'] if o['cost'] is not None)
+    print('engineering:', len(eng['factions']['alliance']['items']), 'recipes,', priced, 'with materials priced,', n, 'with a profit figure (both factions)')
+
+
 def main():
     check_diff_sales()
     shutil.rmtree(TMP, ignore_errors=True)
@@ -161,6 +191,10 @@ def main():
             assert o['refMed'] is None or o['ref'] <= o['refMed'] + 1, o
         for o in out['factions'][fac]['buyNeutralSellHome']['items']:
             assert o['dstMed'] is None or o['sell'] <= o['dstMed'] + 1, o
+    eng = json.load(open(os.path.join(TMP, 'out', 'engineering.json')))
+    check_engineering(eng)
+    for f in eng['factions'].values():
+        assert {o['id'] for o in f['items'] if o['qty']} <= files, 'engineering items without a history file'
     print('price history:', len(files), 'item files, sample', one['id'], {k: len(v) for k, v in one['h'].items()}, 'medians', {k: v.get('med') for k, v in one['s'].items()})
     print('busiest: left out', out['neutralTop']['hiddenItems'], 'items dearer on Blackwater than either house pays')
     print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')

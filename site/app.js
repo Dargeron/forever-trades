@@ -5,7 +5,9 @@
   const S = {
     data: null, faction: 'alliance', dir: 'buyNeutralSellHome', sort: 'profitDay', budget: 100000,
     sortDir: 'desc', showAll: false, open: new Set(), query: '',
-    busySort: 'marketDay', busyDir: 'desc', busyAll: false, busyQuery: '', chartQuery: '',
+    busySort: 'marketDay', busyDir: 'desc', busyAll: false, busyQuery: '', chartQuery: '', chartX: 'market',
+    tab: 'trade', eng: null, engFor: null, engLoading: false, engError: null,
+    engSort: 'profit', engDir: 'desc', engAll: false, engQuery: '', engSkill: 220, engLearn: 'all', engSchool: 'any',
   };
   const FAC = { alliance: 'Alliance', horde: 'Horde' };
   const OTHER = { alliance: 'Horde', horde: 'Alliance' };
@@ -15,6 +17,7 @@
   const KEY_LABEL = { profitDay: 'profit a day', mult: 'back per 1g', marketDay: 'market a day', soldDay: 'sold a day', profitEach: 'profit per item', buy: 'buy price', sell: 'sell price', name: 'name' };
   const ALWAYS = { mult: 1, profitEach: 1, buy: 1, sell: 1, name: 1 };
   const BUSY_KEYS = { name: 1, soldDay: 1, avg: 1, marketDay: 1, resellX: 1, low: 1, aLow: 1, hLow: 1 };
+  const ENG_KEYS = { name: 1, skill: 1, cost: 1, sell: 1, mult: 1, soldDay: 1, profit: 1, profitDay: 1 };
   const $ = (id) => document.getElementById(id);
   const NS = 'http://www.w3.org/2000/svg';
 
@@ -113,6 +116,8 @@
     document.querySelectorAll('.home-name').forEach((n) => { n.textContent = 'sell in ' + home; });
     document.querySelectorAll('.home-name-buy').forEach((n) => { n.textContent = 'Buy in ' + home; });
     renderFresh();
+    showTab();
+    if (S.tab === 'eng') { renderEng(); return; }
     $('explain').textContent = toBW()
       ? 'These items are cheap in the ' + home + ' house and dear in the ' + other + ' house. On Blackwater your buyers are ' + other + ' traders who resell at home, so we price each item at half the ' + other + ' price (they need a profit too), or at the cheapest Blackwater listing if someone already sells for less. Blackwater’s own asking prices are ignored: they are often far too high. Buy at home, then list on Blackwater (Booty Bay, Gadgetzan or Everlook); its 15% cut is already taken off.'
       : 'These items cost less on Blackwater than they sell for in the ' + home + ' house, even after the ' + home + ' house takes its 5% cut. Buy them on Blackwater (they arrive by mail), then list them at home.';
@@ -148,14 +153,14 @@
     }
   }
 
-  function tile(label, value, note) {
+  function tile(label, value, note, build) {
     const t = el('div', 'tile');
     t.append(el('div', 'label', label));
     const val = el('div', 'value'); val.append(value); t.append(val);
     if (note && typeof note === 'object') {
       const n = el('div', 'note'), b = el('button', 'linkish');
       b.type = 'button'; b.append(itemName(note));
-      b.addEventListener('click', (e) => { e.stopPropagation(); openModal(note, details(note)); });
+      b.addEventListener('click', (e) => { e.stopPropagation(); openModal(note, (build || details)(note)); });
       n.append(b); t.append(n);
     } else if (note) t.append(el('div', 'note', note));
     return t;
@@ -505,7 +510,14 @@
 
   function renderScatter(v, bask) {
     const svg = $('scatter'), empty = $('scatter-empty'), legend = $('legend');
-    const all = v.items.filter((o) => o.marketDay > 0 && o.mult > 0);
+    // Across: market a day (gold changing hands where your buyers are) or the sale price of one item.
+    const byPrice = S.chartX === 'price';
+    const xv = (o) => (byPrice ? o.sell : o.marketDay);
+    const sellWhere = toBW() ? 'on Blackwater' : 'in the ' + FAC[S.faction] + ' house';
+    $('scatter-title').textContent = byPrice ? 'Return against sale price' : 'Return against market size';
+    $('scatter-sub').textContent = 'Every item we have seen selling. Up means more money back for each gold you spend; right means ' +
+      (byPrice ? 'a dearer item (its sale price ' + sellWhere + ')' : 'more gold changes hands each day') + '. Hover or tap a dot to see the item.';
+    const all = v.items.filter((o) => o.marketDay > 0 && o.mult > 0 && xv(o) > 0);
     const q = S.chartQuery.toLowerCase();
     const pts = q ? all.filter((o) => o.name.toLowerCase().includes(q)) : all;
     $('chart-count').textContent = !all.length ? '' : (q ? 'Showing ' + pts.length + ' of ' + all.length + ' items' : all.length + ' items');
@@ -524,7 +536,7 @@
     const m = { l: narrow ? 42 : 54, r: 14, t: 14, b: 46 };
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     // Scale and dot sizes always come from every item, so the search box only hides dots: nothing moves.
-    const xs = all.map((o) => Math.log10(o.marketDay)), ys = all.map((o) => Math.log10(o.mult));
+    const xs = all.map((o) => Math.log10(xv(o))), ys = all.map((o) => Math.log10(o.mult));
     let x0 = Math.min.apply(null, xs) - 0.12, x1 = Math.max.apply(null, xs) + 0.12;
     if (x1 - x0 < 1.2) { const mid = (x0 + x1) / 2; x0 = mid - 0.6; x1 = mid + 0.6; }   // a few dots: keep a 10x-plus span of gold ticks
     const y0 = Math.log10(1.1), y1 = Math.max(Math.log10(3), Math.max.apply(null, ys) + 0.08);
@@ -555,7 +567,7 @@
     });
     const where = toBW() ? 'in the ' + OTHER[S.faction] + ' house (your buyers)' : 'in the ' + FAC[S.faction] + ' house';
     const xtl = svgEl('text', { x: (m.l + W - m.r) / 2, y: H - 8, 'text-anchor': 'middle' }, 'axis-title');
-    xtl.textContent = (narrow ? 'Market a day ' : 'Market a day: gold changing hands ') + where;
+    xtl.textContent = byPrice ? 'Sale price of one item ' + sellWhere : (narrow ? 'Market a day ' : 'Market a day: gold changing hands ') + where;
     const ymid = (m.t + H - m.b) / 2;
     const ytl = svgEl('text', { x: 12, y: ymid, transform: 'rotate(-90 12 ' + ymid + ')', 'text-anchor': 'middle' }, 'axis-title');
     ytl.textContent = 'Money back for each 1g spent';
@@ -566,8 +578,8 @@
     const R = (o) => 3.2 + (narrow ? 5.5 : 7.5) * Math.sqrt((o.profitDay || 0) / maxP);
     const dots = svgEl('g');
     pts.slice().sort((a, b) => R(a) - R(b)).forEach((o) => {
-      const cx = X(Math.log10(o.marketDay)), cy = Y(Math.log10(o.mult)), r = R(o);
-      const hit = svgEl('circle', { cx, cy, r: Math.max(11, r + 4), tabindex: 0, 'aria-label': o.name + ', ' + mult(o.mult) + ', ' + money(o.marketDay) + ' a day' }, 'hit');
+      const cx = X(Math.log10(xv(o))), cy = Y(Math.log10(o.mult)), r = R(o);
+      const hit = svgEl('circle', { cx, cy, r: Math.max(11, r + 4), tabindex: 0, 'aria-label': o.name + ', ' + mult(o.mult) + ', ' + (byPrice ? 'sells for ' + money(o.sell) : money(o.marketDay) + ' a day') }, 'hit');
       const dot = svgEl('circle', { cx, cy, r }, 'dot ' + (o.mult >= 2 ? 'solid' : 'fair') + (inB.has(o.id) ? ' inb' : ''));
       const show = () => { dot.classList.add('on'); showTip(o, hit); };
       const hide = () => { dot.classList.remove('on'); $('tooltip').hidden = true; };
@@ -582,7 +594,7 @@
     const labels = svgEl('g'), boxes = [];
     const rank = (o) => (o.profitDay || 0) || (o.marketDay || 0) / 1e6;
     pts.slice().sort((a, b) => rank(b) - rank(a)).slice(0, q ? (narrow ? 12 : 30) : (narrow ? 7 : 14)).forEach((o) => {
-      const cx = X(Math.log10(o.marketDay)), cy = Y(Math.log10(o.mult)), r = R(o);
+      const cx = X(Math.log10(xv(o))), cy = Y(Math.log10(o.mult)), r = R(o);
       const name = o.name.length > 26 ? o.name.slice(0, 25) + '…' : o.name;
       const w = name.length * 6.2 + 6, h = 15;
       const cands = [[cx + r + 4, cy + 4], [cx - r - 4 - w, cy + 4], [cx - w / 2, cy - r - 6], [cx - w / 2, cy + r + 14]];
@@ -774,6 +786,239 @@
     } else more.hidden = true;
   }
 
+  // ---------- tabs: auction trades | engineering (#engineering)
+  function showTab() {
+    const eng = S.tab === 'eng';
+    $('trade-view').hidden = eng; $('eng-view').hidden = !eng;
+    $('dir-seg').hidden = eng;
+    $('tab-trade').setAttribute('aria-selected', String(!eng));
+    $('tab-eng').setAttribute('aria-selected', String(eng));
+  }
+  function setTab(tab, push) {
+    if (tab === S.tab) return;
+    S.tab = tab; remember('tab', tab);
+    if (push) history.replaceState(null, '', location.pathname + location.search + (tab === 'eng' ? '#engineering' : ''));
+    $('tooltip').hidden = true;
+    render();
+  }
+
+  // ---------- engineering: what to craft and sell in your faction's house (data/engineering.json)
+  async function loadEng() {
+    if (S.engLoading || !S.data) return;
+    S.engLoading = true; S.engError = null;
+    const want = S.data.generated;
+    try {
+      const r = await fetch('data/engineering.json?g=' + encodeURIComponent(want), { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      S.eng = await r.json(); S.engFor = want;
+    } catch (e) { S.engError = e.message; }
+    S.engLoading = false;
+    if (S.tab === 'eng') renderEng();
+  }
+  function fineCoins(c) {
+    if (bad(c) || c >= 20 || Math.abs(c - Math.round(c)) < 0.05) return coins(c);
+    const span = el('span', 'money');
+    span.append(String(Math.round(c * 10) / 10), el('span', 'uc', 'c'));
+    return span;
+  }
+  function engName(i) { const n = (S.eng.names || {})[i] || ['Item #' + i, 1]; return { id: i, name: n[0], q: n[1] }; }
+  function qtyTxt(q) { return Math.abs(q - Math.round(q)) < 1e-6 ? String(Math.round(q)) : num(q, 2); }
+  function learnTxt(o) { return o.school ? (o.school === 'gnomish' ? 'Gnomish' : 'Goblin') : (o.learn === 'schematic' ? 'Schematic' : 'Trainer'); }
+  function engShare(o) { return o.soldDay ? 0.25 * o.soldDay : null; }
+
+  function engList() {
+    const f = S.eng.factions[S.faction] || { items: [] };
+    let list = f.items.filter((o) => o.skill <= S.engSkill
+      && (S.engLearn === 'all' || o.learn === 'trainer')
+      && (S.engSchool === 'any' || (S.engSchool === 'none' ? !o.school : !o.school || o.school === S.engSchool)));
+    if (S.engQuery) { const q = S.engQuery.toLowerCase(); list = list.filter((o) => o.name.toLowerCase().includes(q)); }
+    const val = (o) => (o.profit === null || o.profit === undefined ? -1e15 : o.profit);
+    sortList(list, S.engSort, S.engDir, (a, b) => val(b) - val(a));
+    return list;
+  }
+
+  function renderEng() {
+    const home = FAC[S.faction];
+    $('eng-explain').textContent = 'What to make with Engineering and sell in the ' + home + ' auction house. Each material is priced the cheapest way you can get it: bought in the ' + home + ' house, bought from a vendor, or made by you (smelting ore into bars, making the parts), and compared with what the finished item sells for there after the 5% cut.';
+    const sold = document.querySelector('#eng-card th[data-sort="soldDay"] .th-label');
+    if (sold) sold.textContent = 'Sold a day (' + home + ' AH)';
+    markHeaders($('eng-card'), S.engSort, S.engDir);
+    const tb = $('eng-body');
+    if (!S.eng || S.engFor !== S.data.generated) {
+      tb.textContent = '';
+      const tr = el('tr'), td = el('td', 'empty', S.engError ? 'Could not load the recipes (' + S.engError + '). Try again in a minute.' : 'Loading the recipes…');
+      td.colSpan = 9; tr.append(td); tb.append(tr);
+      $('eng-tiles').textContent = ''; $('eng-more').hidden = true;
+      if (!S.engError) loadEng();
+      return;
+    }
+    const f = S.eng.factions[S.faction] || { items: [], salesHours: 0 };
+    const h = f.salesHours || 0, bn = $('eng-banner');
+    bn.textContent = '';
+    bn.hidden = h >= 24;
+    if (h < 24) bn.append(el('b', null, 'Early estimates. '), 'Sales figures are based on ' + num(h, 0) + (h < 1.5 ? ' hour' : ' hours') + ' of snapshots so far and will settle over a day or two. Prices and material costs are today’s.');
+    const list = engList();
+    renderEngTiles(list);
+    const n = list.length, total = f.items.length;
+    $('eng-title').textContent = n ? n + ' recipes up to skill ' + S.engSkill : 'Engineering recipes';
+    const order = S.engSort === 'name' ? (S.engDir === 'asc' ? 'A to Z' : 'Z to A') : (S.engDir === 'asc' ? 'lowest first' : 'highest first');
+    const lab = { name: 'name', skill: 'skill', cost: 'materials', sell: 'selling price', mult: 'back per 1g', soldDay: 'sold a day', profit: 'profit per craft', profitDay: 'profit a day' }[S.engSort];
+    $('eng-sub').textContent = 'Sorted by ' + lab + ', ' + order + '. Tap a column heading to sort by it, or a recipe for its materials, step by step. Showing ' + n + ' of the ' + total + ' Engineering recipes that make something you can sell.';
+    tb.textContent = '';
+    if (!list.length) {
+      const tr = el('tr'), td = el('td', 'empty', S.engQuery ? 'No recipe matches “' + S.engQuery + '”.' : 'No recipe matches these filters.');
+      td.colSpan = 9; tr.append(td); tb.append(tr); $('eng-more').hidden = true; return;
+    }
+    const max = Math.max.apply(null, list.map((o) => o.profit || 0)) || 1;
+    const shown = S.engAll || S.engQuery ? list : list.slice(0, PAGE);
+    shown.forEach((o, i) => {
+      const tr = el('tr', o.profit === null ? 'nodata' : (o.profit <= 0 ? 'loss' : ''));
+      tr.append(el('td', 'c-rank', String(i + 1)));
+      const ti = el('td', 'c-item');
+      ti.append(itemName(o));
+      const sub = el('span', 'item-sub');
+      sub.append(el('span', 'flag', 'Skill ' + o.skill), el('span', 'flag', learnTxt(o)));
+      if (o.n !== 1) sub.append(el('span', 'flag', 'makes ' + num(o.n, 1)));
+      if (o.missing && o.missing.length) sub.append(el('span', 'flag warn', 'no price for ' + o.missing.join(', ')));
+      if (!o.sell) sub.append(el('span', 'flag', 'not seen in the ' + home + ' house'));
+      ti.append(sub);
+      const ms = el('span', 'item-sub only-s');
+      ms.append('Materials ', coins(o.cost), ' → sells ', o.sell ? fineCoins(o.sell) : '–', o.n !== 1 ? ' each' : '');
+      const sd = el('span', 'item-sub only-m');
+      sd.append('Sold a day (' + home + ' AH): ' + soldTxt(o));
+      ti.append(ms, sd);
+      tr.append(ti, numTd(String(o.skill), 'hide-l'), numTd(coins(o.cost), 'hide-s'), numTd(o.sell ? fineCoins(o.sell) : '–', 'hide-s'));
+      const tdr = numTd(mult(o.mult), 'ret c-ret'); if (o.mult) shade(tdr, o.mult, Math.log10(1.15), Math.log10(30)); tr.append(tdr);
+      tr.append(numTd(soldTxt(o), 'hide-m'));
+      const bar = el('td', 'c-bar'), val = el('span', 'val');
+      if (o.profit === null) val.append(el('span', 'muted', '–')); else val.append(coins(o.profit, true));
+      const track = el('span', 'track'), fill = el('span', 'fill');
+      fill.style.width = (o.profit > 0 ? Math.max(1.5, Math.min(100, 100 * o.profit / max)) : 0) + '%';
+      track.append(fill); bar.append(val, track); tr.append(bar);
+      tr.append(numTd(o.profitDay ? coins(o.profitDay, true) : '–', 'hide-t'));
+      tb.append(tr, expandable(tr, 9, () => engDetails(o)));
+    });
+    const more = $('eng-more');
+    if (!S.engQuery && list.length > PAGE) {
+      more.hidden = false;
+      more.textContent = S.engAll ? 'Show the top ' + PAGE + ' only' : 'Show all ' + list.length + ' recipes';
+    } else more.hidden = true;
+  }
+
+  function renderEngTiles(list) {
+    const box = $('eng-tiles'); box.textContent = '';
+    const good = list.filter((o) => o.profit > 0);
+    if (!good.length) { box.append(tile('Recipes that make a profit', '0', 'None at these settings right now')); return; }
+    const best = good.reduce((a, o) => (o.profit > a.profit ? o : a));
+    const day = good.filter((o) => o.profitDay > 0);
+    box.append(tile('Biggest profit per craft', coins(best.profit, true), best, engDetails));
+    if (day.length) {
+      const bd = day.reduce((a, o) => (o.profitDay > a.profitDay ? o : a));
+      box.append(tile('Best profit a day', coins(bd.profitDay, true), bd, engDetails));
+    }
+    box.append(tile('Recipes that make a profit', good.length + ' of ' + list.length, 'Up to skill ' + S.engSkill + ', at today’s prices'));
+  }
+
+  // One line per material: how much, the cheapest way to get it, and what the other ways cost.
+  function matList(nodes) {
+    const ul = el('ul', 'mats');
+    nodes.forEach((p) => {
+      const li = el('li'), line = el('div', 'mat-line');
+      const info = engName(p.i), b = el('button', 'linkish');
+      b.type = 'button'; b.append(itemName(info));
+      b.addEventListener('click', (e) => { e.stopPropagation(); openModal(info, matPanel(p, info)); });
+      line.append(el('span', 'mat-q', qtyTxt(p.qty) + ' × '), b, ' ');
+      const how = el('span', 'mat-how');
+      if (p.how === 'ah') how.append('buy' + (p.recent ? ' (none listed now: recent price)' : '') + (p.short ? ' (fewer listed than needed)' : '') + ', ', coins(p.ah), ' each');
+      else if (p.how === 'vendor') how.append('from a vendor, ', coins(p.v), ' each');
+      else if (p.how === 'make') how.append((p.by === 'smelt' ? 'smelt' : 'make') + (p.n !== 1 ? ' (' + num(p.n, 1) + ' a craft)' : '') + ', ', coins(p.mk), ' each');
+      else how.append(el('span', 'warn-t', 'no price: not on the auction house lately'));
+      line.append(how);
+      if (p.c !== null) { const t = el('span', 'mat-total'); t.append(coins(p.c)); line.append(t); }
+      const alt = [];
+      if (p.how !== 'ah' && p.ah) alt.push(join('auction house ', coins(p.ah)));
+      if (p.how !== 'make' && p.mk) alt.push(join('making it ', coins(p.mk)));
+      if (p.how !== 'vendor' && p.v) alt.push(join('vendor ', coins(p.v)));
+      if (alt.length) {
+        const a = el('span', 'mat-alt');
+        a.append('instead: ');
+        alt.forEach((x, k) => { if (k) a.append(', '); a.append(x); });
+        line.append(a);
+      }
+      li.append(line);
+      if (p.p && p.how === 'make') li.append(matList(p.p));
+      ul.append(li);
+    });
+    return ul;
+  }
+  // Everything to buy for one craft, after smelting and making the parts yourself.
+  function rawShopping(nodes) {
+    const ah = new Map(), ven = new Map();
+    const walk = (list) => list.forEach((p) => {
+      if (p.how === 'make' && p.p) return walk(p.p);
+      const m = p.how === 'vendor' ? ven : ah;
+      const cur = m.get(p.i) || { qty: 0, c: 0 };
+      cur.qty += p.qty; cur.c += p.c || 0; m.set(p.i, cur);
+    });
+    walk(nodes);
+    const box = el('div', 'shop');
+    [[ah, 'Buy on the auction house'], [ven, 'Buy from a vendor']].forEach(([m, label]) => {
+      if (!m.size) return;
+      const p = el('p');
+      p.append(el('b', null, label + ': '));
+      let k = 0, tot = 0;
+      m.forEach((v, i) => {
+        if (k++) p.append(', ');
+        p.append(qtyTxt(v.qty) + ' × ', itemName(engName(i)));
+        tot += v.c;
+      });
+      p.append(' (', coins(tot), ')');
+      box.append(p);
+    });
+    if (nodes.some(function frac(p) { return Math.abs(p.qty - Math.round(p.qty)) > 1e-6 || (p.how === 'make' && (p.p || []).some(frac)); })) {
+      box.append(el('p', 'muted', 'Fractions are shares of a batch (one Gold Bar makes 3 Gold Power Cores, one Copper and one Tin Bar make 2 Bronze Bars): the rest carries over to your next craft.'));
+    }
+    return box;
+  }
+  function matPanel(p, info) {
+    const box = el('div', 'details'), dl = el('dl'), home = FAC[S.faction];
+    const way = { ah: 'Buy it in the ' + home + ' house', vendor: 'Buy it from a vendor', make: p.by === 'smelt' ? 'Smelt it' : 'Make it (Engineering)', none: 'No price' }[p.how];
+    [['Cheapest way', way],
+     ['In the ' + home + ' house', p.ah ? join(coins(p.ah), p.recent ? ' (recent; none listed now)' : ' each') : 'not listed'],
+     ['From a vendor', p.v ? coins(p.v) : '–'],
+     ['Making it yourself', p.mk ? join(coins(p.mk), ' each') : '–']].forEach(([k, val]) => {
+      const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv);
+    });
+    box.append(dl, historySection(info.id));
+    return box;
+  }
+
+  function engDetails(o) {
+    const home = FAC[S.faction];
+    const box = el('div', 'details'), dl = el('dl');
+    const share = engShare(o);
+    const rows = [
+      ['Materials for one craft', o.cost === null ? el('span', 'warn-t', 'unknown: no price for ' + o.missing.join(', ')) : coins(o.cost)],
+      ['Makes', num(o.n, 1) + (o.n === 1 ? ' item' : ' items')],
+      ['Sells for, each (' + home + ')', o.sell ? join(fineCoins(o.sell), priceNote(o.sell, o.low, o.paid, o.med)) : 'not listed or sold lately'],
+      ['You get back, one craft (after 5% cut)', o.back ? coins(o.back) : '–'],
+      ['Profit per craft', o.profit === null ? '–' : coins(o.profit, true)],
+      ['Back per 1g', mult(o.mult)],
+      ['Sold a day in the ' + home + ' house', soldTxt(o)],
+      ['Listed in the ' + home + ' house', num(o.qty || 0, 0)],
+      ['Paid on average', o.paid ? coins(o.paid) : 'no sales seen yet'],
+      ['Your share a day', share ? (share < 1 ? 'about 1 every ' + num(1 / share, 1) + ' days' : num(share, 1) + (o.n === 1 ? '' : ' (' + num(share / o.n, 1) + (share / o.n < 1.5 ? ' craft)' : ' crafts)'))) : '–'],
+      ['Profit a day', o.profitDay ? coins(o.profitDay, true) : '–'],
+      ['Skill needed', String(o.skill)],
+      ['How to learn it', o.how],
+    ];
+    rows.forEach(([k, val]) => { const kv = el('div', 'kv'), dd = el('dd'); dd.append(val); kv.append(el('dt', null, k), dd); dl.append(kv); });
+    box.append(dl);
+    const mh = el('h4', 'history-title', 'Materials for one craft');
+    box.append(mh, matList(o.parts), rawShopping(o.parts), historySection(o.id));
+    return box;
+  }
+
   // ---------- events
   document.querySelectorAll('th[data-sort]').forEach((th) => {
     const label = th.textContent.trim();
@@ -787,7 +1032,11 @@
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       const key = th.dataset.sort;
-      if (th.closest('#busy-card')) {
+      if (th.closest('#eng-card')) {
+        if (S.engSort === key) S.engDir = S.engDir === 'asc' ? 'desc' : 'asc'; else { S.engSort = key; S.engDir = key === 'name' || key === 'skill' || key === 'cost' ? 'asc' : 'desc'; }
+        remember('engSort', S.engSort + ':' + S.engDir);
+        renderEng();
+      } else if (th.closest('#busy-card')) {
         if (S.busySort === key) S.busyDir = S.busyDir === 'asc' ? 'desc' : 'asc'; else { S.busySort = key; S.busyDir = defaultDir(key); }
         remember('busySort', S.busySort + ':' + S.busyDir);
         renderBusy();
@@ -811,7 +1060,19 @@
   $('more').addEventListener('click', () => { S.showAll = !S.showAll; renderTable(view()); });
   $('search').addEventListener('input', (e) => { S.query = e.target.value.trim(); renderTable(view()); });
   $('busy-more').addEventListener('click', () => { S.busyAll = !S.busyAll; renderBusy(); });
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab, true)));
+  window.addEventListener('hashchange', () => setTab(location.hash === '#engineering' ? 'eng' : 'trade', false));
+  $('eng-skill').addEventListener('input', (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (!(v >= 1)) return;
+    S.engSkill = Math.min(300, v); remember('engSkill', S.engSkill); S.engAll = false; renderEng();
+  });
+  $('eng-learn').addEventListener('change', (e) => { S.engLearn = e.target.value; remember('engLearn', S.engLearn); renderEng(); });
+  $('eng-school').addEventListener('change', (e) => { S.engSchool = e.target.value; remember('engSchool', S.engSchool); renderEng(); });
+  $('eng-search').addEventListener('input', (e) => { S.engQuery = e.target.value.trim(); renderEng(); });
+  $('eng-more').addEventListener('click', () => { S.engAll = !S.engAll; renderEng(); });
   $('busy-search').addEventListener('input', (e) => { S.busyQuery = e.target.value.trim(); renderBusy(); });
+  $('chart-x').addEventListener('change', (e) => { S.chartX = e.target.value; remember('chartX', S.chartX); $('tooltip').hidden = true; renderScatter(view(), basket(view(), S.budget)); });
   $('chart-search').addEventListener('input', (e) => { S.chartQuery = e.target.value.trim(); $('tooltip').hidden = true; renderScatter(view(), basket(view(), S.budget)); });
   document.addEventListener('click', () => { $('tooltip').hidden = true; });
   $('modal-close').addEventListener('click', closeModal);
@@ -819,7 +1080,7 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
   window.addEventListener('scroll', () => { $('tooltip').hidden = true; }, { passive: true });
   let rt;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.data) renderScatter(view(), basket(view(), S.budget)); }, 150); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.data && S.tab === 'trade') renderScatter(view(), basket(view(), S.budget)); }, 150); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.loadedAt && Date.now() - S.loadedAt > 10 * 60000) load(); });
   setInterval(() => { if (S.data) renderFresh(); }, 60000);
 
@@ -848,5 +1109,13 @@
   const bs = (recall('busySort') || '').split(':');
   if (BUSY_KEYS[bs[0]]) { S.busySort = bs[0]; S.busyDir = bs[1] === 'asc' || bs[1] === 'desc' ? bs[1] : defaultDir(bs[0]); }
   const bg = Number(recall('budget')); if (bg) { S.budget = bg; $('budget').value = String(bg); }
+  if (recall('chartX') === 'price') { S.chartX = 'price'; $('chart-x').value = 'price'; }
+  const es = (recall('engSort') || '').split(':');
+  if (ENG_KEYS[es[0]]) { S.engSort = es[0]; S.engDir = es[1] === 'asc' || es[1] === 'desc' ? es[1] : 'desc'; }
+  const sk = parseInt(recall('engSkill'), 10); if (sk >= 1 && sk <= 300) { S.engSkill = sk; $('eng-skill').value = String(sk); }
+  const el2 = recall('engLearn'); if (el2 === 'all' || el2 === 'trainer') { S.engLearn = el2; $('eng-learn').value = el2; }
+  const sc = recall('engSchool'); if (['any', 'gnomish', 'goblin', 'none'].indexOf(sc) >= 0) { S.engSchool = sc; $('eng-school').value = sc; }
+  S.tab = location.hash === '#engineering' ? 'eng' : (location.hash ? 'trade' : (recall('tab') === 'eng' ? 'eng' : 'trade'));
+  showTab();
   load();
 })();

@@ -1,4 +1,4 @@
-`items.json` is derived from [wow-classic-items](https://github.com/Nakroma/wow-classic-items)
+`items.json` and `recipes.json` (Engineering and smelting recipes, vendor prices) are derived from [wow-classic-items](https://github.com/Nakroma/wow-classic-items)
 by Nakroma, published under the MIT License:
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy of this

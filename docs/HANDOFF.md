@@ -452,3 +452,23 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   faction price was below the Blackwater price on screen). The ratio had compared with the average price
   paid over past hours; it now compares with the cheapest Blackwater listing now (the average paid only
   when nothing is listed), and items unprofitable at today's price drop out.
+
+## 14. Engineering tab and the hourly fallback (14 Nov 2026)
+
+- **Hourly fallback.** GitHub still had not fired one scheduled run (crons tried: :17, :38, :08/:28/:48,
+  :09/:29/:49; push and manual runs always work). As the owner asked, an hourly Claude scheduled task in the
+  owner's account (not in this repo) wakes a small helper session at :53 that lists update.yml runs from the
+  last 70 minutes and starts one manual run (force false) unless a scheduled run already succeeded. The first
+  one fired at 00:53 UTC and deployed the 00:19 snapshot. If GitHub's schedule starts working, the helper does
+  nothing. To stop it, delete the scheduled task in the Claude app.
+- **Engineering tab** (owner's request: "the best things to craft with engineering at 220 … you can buy raw
+  mats and smelt them"). `tools/build_recipes.py` extracts 164 Engineering and 15 smelting recipes, schematic
+  sources, Gnomish/Goblin specialisations and vendor prices from wow-classic-items. The pipeline prices each
+  recipe for both factions (`engineering.json`, ~30 KB gzipped) and writes history files for every product and
+  material. On the 13 Nov 22:19 Alliance snapshot, up to skill 220: 53 of 95 recipes make a profit; biggest per
+  craft were Gnomish Cloaking Device (+3g34s, materials ~1g02s by making Gyrochronatoms from smelted iron and
+  gold) and Mechanical Dragonling (+2g06s), but neither had a sale seen yet; the best by profit a day were
+  steady sellers such as Bronze Framework, Deadly Scope, Mechanical Repair Kit, Catseye Ultra Goggles and
+  Mithril Frag Bombs. Making Gyrochronatoms, Iron Struts, Bronze Tubes and Whirring Bronze Gizmos was cheaper
+  than buying them.
+- **Chart across switch**: market a day or sale price (see CLAUDE.md).
