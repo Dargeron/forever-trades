@@ -873,6 +873,25 @@ def cmd_recipes(api, args):
                         print(f"    {c.get('name')} | {b4.get('name')} | item {made.get('id')} | made {q} | {reag} | other keys {extra}")
                     else:
                         print(f"    recipe {r['id']} {r.get('name')}: HTTP {st4}")
+    # items that only exist in WoW: Forever (products and reagents): name, quality, class, binding, vendor sell price
+    ids = set()
+    for p in out['professions'].values():
+        for t in p['tiers'].values():
+            for b in t['recipes'].values():
+                for k in ('crafted_item', 'alliance_crafted_item', 'horde_crafted_item'):
+                    if (b or {}).get(k):
+                        ids.add(b[k]['id'])
+                ids.update(x['reagent']['id'] for x in (b or {}).get('reagents') or [])
+    out['items'] = {}
+    for i in sorted(x for x in ids if str(x) not in ITEMS):
+        st5, b5, _ = api.get(f'/data/wow/item/{i}', ns='static')
+        if st5 == 200 and b5:
+            pv = b5.get('preview_item') or {}
+            out['items'][str(i)] = {'name': b5.get('name'), 'quality': (b5.get('quality') or {}).get('type'),
+                                    'class': (b5.get('item_class') or {}).get('name'), 'subclass': (b5.get('item_subclass') or {}).get('name'),
+                                    'binding': (pv.get('binding') or {}).get('type'), 'sell': b5.get('sell_price'), 'buy': b5.get('purchase_price'),
+                                    'stack': b5.get('max_count')}
+    print(len(out['items']), 'Forever-only items described')
     if args.out_file:
         with open(args.out_file, 'w') as f:
             json.dump(out, f, separators=(',', ':'))
