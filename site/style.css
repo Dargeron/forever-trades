@@ -258,6 +258,9 @@ tr.details-row > td { background: var(--panel-3); padding: 10px 12px 12px; }
 .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; }
 .sw.solid { background: var(--dot-solid); } .sw.fair { background: var(--dot-fair); }
 .sw.ring { border: 2.5px solid var(--ring); background: transparent; }
+.size-key { flex-wrap: wrap; gap: 4px 10px !important; }
+.size-ref { display: inline-flex; align-items: center; gap: 4px; }
+.size-dot circle { fill: var(--dot-solid); opacity: .75; stroke: var(--panel); stroke-width: 1; }
 
 /* top-ten pair */
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

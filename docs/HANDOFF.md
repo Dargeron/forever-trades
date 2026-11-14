@@ -472,3 +472,5 @@ AidVir/wow-forever-favor). Nothing is officially documented yet.
   Mithril Frag Bombs. Making Gyrochronatoms, Iron Struts, Bronze Tubes and Whirring Bronze Gizmos was cheaper
   than buying them.
 - **Chart across switch**: market a day or sale price (see CLAUDE.md).
+- **Dot size = sale price of one item** (owner's request; was profit a day). Log-scaled: chart prices ran from 10c to
+  750g, so a strictly proportional size would leave nearly every dot a pinpoint. A key under the chart shows sample sizes.

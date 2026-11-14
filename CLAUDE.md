@@ -90,7 +90,9 @@ python3 -m http.server -d site 8000
   craft); profit per craft = n × sell × 0.95 − cost; profit a day = profit / n × 25% of sold a day. BoP products
   are left out; Mining skill for smelting is assumed. Rows carry the full material tree (`parts`, nodes `i, qty,
   how, c, ah, v, mk, p...`); names of materials are in `names`. The site filters by skill/schematic/specialisation.
-- Chart "Across" switch: market a day (default, the owner's original spec) or sale price; remembered. The owner once
+- Chart "Across" switch: market a day (default, the owner's original spec) or sale price; remembered. Dot size = sale
+  price of one item (owner's request), log-scaled across all chart items (10c to 750g on live data), with a size key;
+  drawn biggest first so small dots stay on top. The owner once
   read market a day as price (a 2g pattern selling 21/day sat right of a 5g one selling 5/day).
 - Never move gold between factions (Blizzard forbids it on Classic versions). Trade goods only. The site says so.
 

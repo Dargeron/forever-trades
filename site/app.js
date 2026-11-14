@@ -574,10 +574,16 @@
     svg.append(grid, guides, axis, xtl, ytl);
 
     const inB = new Set(bask.lines.map((l) => l.o.id));
-    const maxP = Math.max.apply(null, all.map((o) => o.profitDay || 0).concat([1]));
-    const R = (o) => 3.2 + (narrow ? 5.5 : 7.5) * Math.sqrt((o.profitDay || 0) / maxP);
+    // Dot size: the sale price of one item (owner's request), from all items so a search never resizes a dot.
+    // Prices run from a few copper to hundreds of gold, so the size steps up evenly with each tenfold rise
+    // in price: proportional to the price itself, nearly every dot would be a pinpoint next to the dearest one.
+    const lp = all.map((o) => Math.log10(Math.max(1, o.sell)));
+    const p0 = Math.min.apply(null, lp), p1 = Math.max.apply(null, lp);
+    const rMin = 2.8, rMax = narrow ? 9 : 12;
+    const R = (o) => rMin + (rMax - rMin) * (p1 > p0 ? (Math.log10(Math.max(1, o.sell)) - p0) / (p1 - p0) : 0.5);
+    renderSizeKey(p0, p1, R);
     const dots = svgEl('g');
-    pts.slice().sort((a, b) => R(a) - R(b)).forEach((o) => {
+    pts.slice().sort((a, b) => R(b) - R(a)).forEach((o) => {      // biggest first, so small dots stay visible on top
       const cx = X(Math.log10(xv(o))), cy = Y(Math.log10(o.mult)), r = R(o);
       const hit = svgEl('circle', { cx, cy, r: Math.max(11, r + 4), tabindex: 0, 'aria-label': o.name + ', ' + mult(o.mult) + ', ' + (byPrice ? 'sells for ' + money(o.sell) : money(o.marketDay) + ' a day') }, 'hit');
       const dot = svgEl('circle', { cx, cy, r }, 'dot ' + (o.mult >= 2 ? 'solid' : 'fair') + (inB.has(o.id) ? ' inb' : ''));
@@ -609,6 +615,23 @@
       }
     });
     svg.append(labels);
+  }
+
+  // The chart's size key: a few sample dots (whole powers of ten within the prices on the chart) and their price.
+  function renderSizeKey(p0, p1, R) {
+    const key = $('size-key'); key.textContent = '';
+    key.append('Dot size: what one sells for');
+    let refs = [];
+    for (let e = Math.ceil(p0); e <= Math.floor(p1); e++) refs.push(Math.pow(10, e));
+    if (refs.length > 4) refs = refs.filter((_, k) => (refs.length - 1 - k) % 2 === 0);
+    if (refs.length < 2) refs = [Math.pow(10, p0), Math.pow(10, p1)].filter((x, k, a) => k === 0 || x !== a[0]);
+    refs.forEach((c) => {
+      const r = R({ sell: c }), s = Math.ceil(r * 2 + 2);
+      const sv = svgEl('svg', { width: s, height: s, viewBox: '0 0 ' + s + ' ' + s, 'aria-hidden': 'true' }, 'size-dot');
+      sv.append(svgEl('circle', { cx: s / 2, cy: s / 2, r }));
+      const item = el('span', 'size-ref'); item.append(sv, money(c));
+      key.append(item);
+    });
   }
 
   // ---------- the two top-ten tables
