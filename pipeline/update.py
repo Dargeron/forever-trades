@@ -15,7 +15,7 @@ Usage
 Credentials come from the environment: BLIZZARD_CLIENT_ID, BLIZZARD_CLIENT_SECRET.
 Only the standard library is used.
 """
-import argparse, base64, gzip, json, math, os, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, base64, gzip, json, math, os, sys, time, urllib.error, urllib.parse, urllib.request, zipfile
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime, format_datetime
 
@@ -754,6 +754,65 @@ def node_ids(nodes):
         yield from node_ids(p.get('p') or [])
 
 
+# --------------------------------------------------------------------------- in-game addon
+ADDON_DIR = os.path.join(HERE, '..', 'addon', 'ForeverTrades')
+
+
+def lua_str(s):
+    return '"' + str(s).replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').replace('\r', '') + '"'
+
+
+def lua_num(x):
+    if x is None:
+        return 'nil'
+    return repr(round(x, 3)) if isinstance(x, float) else str(int(x))
+
+
+def addon_data(result):
+    """ForeverTrades_Data.lua: the two trade lists per faction, in the site's order (profit a day), for the
+    in-game addon, which can't go online itself. Every listed item, no top-N cut."""
+    epoch = lambda iso: int(datetime.fromisoformat(iso).timestamp())
+    out = ['-- Forever Trades prices, written by the website\'s hourly update. Do not edit: run UpdateData instead.',
+           'ForeverTradesData = {',
+           f'  version = 1, generated = {epoch(result["generated"])}, site = "https://dargeron.github.io/forever-trades/",',
+           '  snapshot = { ' + ', '.join(f'{k} = {epoch(v["snapshot"])}' for k, v in result['houses'].items()) + ' },']
+    keys = (('id', 'id'), ('q', 'q'), ('buy', 'buy'), ('sell', 'sell'), ('back', 'back'), ('mult', 'mult'), ('soldDay', 'sold'),
+            ('unitsDay', 'units'), ('profitEach', 'each'), ('expected', 'exp'), ('profitDay', 'day'), ('dep', 'dep'))
+    for fac, f in result['factions'].items():
+        out.append(f'  {fac} = {{')
+        for src, dst in (('buyNeutralSellHome', 'toHome'), ('buyHomeSellNeutral', 'toNeutral')):
+            out.append(f'    {dst} = {{')
+            for o in f[src]['items']:
+                fields = ', '.join(f'{b} = {lua_num(o.get(a))}' for a, b in keys if o.get(a) is not None)
+                out.append(f'      {{ name = {lua_str(o["name"])}, {fields} }},')
+            out.append('    },')
+        out.append('  },')
+    out.append('}')
+    return '\n'.join(out) + '\n'
+
+
+def write_addon(result, out_dir):
+    """data/ForeverTrades_Data.lua (what UpdateData downloads) and data/ForeverTrades.zip (the whole addon,
+    with today's prices, ready to unzip into Interface/AddOns)."""
+    lua = addon_data(result)
+    with open(os.path.join(out_dir, 'ForeverTrades_Data.lua'), 'w', encoding='utf-8') as f:
+        f.write(lua)
+    if not os.path.isdir(ADDON_DIR):
+        return
+    tmp = os.path.join(out_dir, 'ForeverTrades.zip.tmp')
+    with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as z:
+        for name in sorted(os.listdir(ADDON_DIR)):
+            if name == 'ForeverTrades_Data.lua':
+                continue
+            info = zipfile.ZipInfo('ForeverTrades/' + name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.external_attr = (0o755 if name.endswith('.command') else 0o644) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with open(os.path.join(ADDON_DIR, name), 'rb') as src:
+                z.writestr(info, src.read())
+        z.writestr('ForeverTrades/ForeverTrades_Data.lua', lua)
+    os.replace(tmp, os.path.join(out_dir, 'ForeverTrades.zip'))
+
+
 # --------------------------------------------------------------------------- commands
 def match_scores(api):
     """Score every auction house against an EU PvP fingerprint (pipeline/fingerprint.json:
@@ -1038,6 +1097,7 @@ def cmd_run(api, args):
             mats.update(node_ids(o['parts']))
     eng['names'] = {str(i): item_info(i, names_cache)[:2] for i in sorted(mats)}     # materials' names and quality
     jsave(os.path.join(args.out, 'engineering.json'), eng)
+    write_addon(result, args.out)
     ids |= mats | {o['id'] for f in eng['factions'].values() for o in f['items']}
     sdir = os.path.join(args.out, 'series')
     os.makedirs(sdir, exist_ok=True)

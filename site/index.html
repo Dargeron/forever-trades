@@ -21,7 +21,7 @@
     <h1>Forever Trades</h1>
     <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater. Prices come from Blizzard every hour.</p>
     <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
-    <p class="rescan-row"><button type="button" class="rescan-btn" id="rescan" title="Ask Blizzard for its newest prices and rebuild the site"><span aria-hidden="true">↻</span> Rescan now</button><span class="rescan-status" id="rescan-status" aria-live="polite"></span></p>
+    <p class="rescan-row"><button type="button" class="rescan-btn" id="rescan" title="Ask Blizzard for its newest prices and rebuild the site"><span aria-hidden="true">↻</span> Rescan now</button><a class="addon-link" href="#addon">In-game addon</a><span class="rescan-status" id="rescan-status" aria-live="polite"></span></p>
   </header>
 
   <div class="tabs" role="tablist" aria-label="Pages">
@@ -171,6 +171,24 @@
         </table>
       </div>
       <button type="button" class="more" id="busy-more" hidden></button>
+    </section>
+
+    <section class="card" id="addon">
+      <h2>In-game addon</h2>
+      <p class="sub">Forever Trades in the game: open an auction house and a window beside it lists this site's trades from where you stand, leaving out everything you already have listed.</p>
+      <ul class="addon-points">
+        <li><b>At Blackwater</b> (Booty Bay, Gadgetzan, Everlook): what to buy here now and sell at home, and what to bring from home to sell here.</li>
+        <li><b>At your faction's house</b>: what to buy here now and sell on Blackwater, and what to bring from Blackwater to sell here.</li>
+        <li>It reads <b>your own listings</b> when the auction house opens and remembers them for each house, so whatever you're already selling is left out (a box shows them again). Items in your bags are marked. Click an item to search for it.</li>
+      </ul>
+      <p><a class="copy addon-dl" href="data/ForeverTrades.zip" download>Download the addon (.zip)</a></p>
+      <ol class="addon-steps">
+        <li>Unzip it into your WoW: Forever folder, under <b>Interface → AddOns</b>, so you get a folder called <b>ForeverTrades</b> there.</li>
+        <li>In the game's AddOns list, if it says “out of date”, tick <b>Load out of date AddOns</b>.</li>
+        <li>Before you play (and whenever you like), double-click <b>UpdateData</b> in that folder (UpdateData.bat on Windows, UpdateData.command on a Mac) for the newest prices, then type <b>/reload</b> in the game. The window says how old its prices are.</li>
+        <li><b>/ft</b> opens or closes the window anywhere; <b>/ft blackwater</b> shows the Blackwater lists.</li>
+      </ol>
+      <p class="muted-note">The game doesn't let addons go online, so the prices come from this site's hourly file, not from inside the game. The download always includes the newest prices.</p>
     </section>
 
     <section class="card help">

@@ -19,6 +19,14 @@ materials cost the cheapest way (buy in your faction's house, buy from a vendor,
 the parts yourself) against what the item sells for there after the 5% cut, filtered by your skill
 (220 by default), schematics and Gnomish/Goblin specialisation.
 
+## In-game addon
+
+`addon/ForeverTrades` is a WoW: Forever addon: at an auction house it lists this site's trades from where you stand
+(Blackwater or your faction's house), minus what you already have listed (read in game, remembered per house).
+Addons can't go online, so every hourly run writes `data/ForeverTrades_Data.lua` and `data/ForeverTrades.zip`
+(the addon with the newest prices); `UpdateData.bat` / `UpdateData.command` in the addon folder fetch the newest
+prices, then `/reload`. Test it outside the game with `python3 tools/addon_test.py <data file>` (needs liblua5.4).
+
 ## How it updates
 
 `.github/workflows/update.yml` runs every hour on GitHub Actions (free for public

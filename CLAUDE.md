@@ -35,6 +35,14 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   :53 (force false) unless a scheduled run succeeded in the last 70 minutes. Restores and saves history on the
   `state` branch (force-pushed single commit), deploys Pages via artifact. `probe.yml`: manual house listing.
 - `tools/selftest.py`: 9 simulated hours, offline. Run after any pipeline change.
+- `addon/ForeverTrades/`: the in-game addon (owner's request). WoW: Forever runs on the modern (Midnight) client,
+  `## Interface: 16001` (third-party figure; if wrong, players tick "Load out of date AddOns"). Addons can't go online,
+  so the pipeline writes `site/data/ForeverTrades_Data.lua` (both factions' two lists, site order, no top-N) and
+  `site/data/ForeverTrades.zip` (addon + that file) every run; `UpdateData.bat`/`.command` download the data file.
+  `Logic.lua` has no game calls; `ForeverTrades.lua` is the window/events (C_AuctionHouse owned auctions, with the
+  legacy API as fallback; Blackwater detected by zone names in en/es/de/fr plus a manual switch remembered per zone;
+  listings stored per character and house in `ForeverTradesDB`, older than 48 h ignored). Keep it Lua 5.1.
+  `tools/addon_test.py <data.lua>` runs it in Lua 5.4 (ctypes, liblua5.4) against a fake game API.
 
 ## Running it
 - Live site: https://dargeron.github.io/forever-trades/ (anyone with the link). Pages source: GitHub Actions.
@@ -46,6 +54,7 @@ Full background, decisions and history: `docs/HANDOFF.md`.
 ```bash
 python3 tools/build_items.py
 python3 tools/selftest.py
+python3 tools/addon_test.py /tmp/ft-selftest/out/ForeverTrades_Data.lua   # after the self-test
 BLIZZARD_CLIENT_ID=… BLIZZARD_CLIENT_SECRET=… python3 pipeline/update.py run --state state --out site/data [--force]
 python3 -m http.server -d site 8000
 ```

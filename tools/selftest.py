@@ -213,6 +213,15 @@ def main():
     check_engineering(eng)
     for f in eng['factions'].values():
         assert {o['id'] for o in f['items'] if o['qty']} <= files, 'engineering items without a history file'
+    # in-game addon: data file and zip
+    lua = open(os.path.join(TMP, 'out', 'ForeverTrades_Data.lua'), encoding='utf-8').read()
+    assert lua.count('ForeverTradesData = {') == 1 and 'toHome = {' in lua and 'toNeutral = {' in lua, lua[:300]
+    n_items = sum(len(f[k]['items']) for f in out['factions'].values() for k in f)
+    assert lua.count('{ name = ') == n_items, (lua.count('{ name = '), n_items)
+    import zipfile
+    names = zipfile.ZipFile(os.path.join(TMP, 'out', 'ForeverTrades.zip')).namelist()
+    assert {'ForeverTrades/ForeverTrades.toc', 'ForeverTrades/ForeverTrades_Data.lua', 'ForeverTrades/UpdateData.bat'} <= set(names), names
+    print('addon:', n_items, 'trades in ForeverTrades_Data.lua,', len(names), 'files in ForeverTrades.zip')
     print('price history:', len(files), 'item files, sample', one['id'], {k: len(v) for k, v in one['h'].items()}, 'medians', {k: v.get('med') for k, v in one['s'].items()})
     print('busiest: left out', out['neutralTop']['hiddenItems'], 'items dearer on Blackwater than either house pays')
     print('busiest on Blackwater:', len(top), 'items, top', top[0]['name'], top[0]['marketDay'], 'copper a day')

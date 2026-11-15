@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: Forever Trades
+## Notes: Cross-faction auction trades from the Forever Trades website, leaving out what you already sell.
+## Author: Forever Trades
+## Version: 1.0
+## SavedVariables: ForeverTradesDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_01
+ForeverTrades_Data.lua
+Logic.lua
+ForeverTrades.lua

@@ -1190,7 +1190,10 @@
   $('search').addEventListener('input', (e) => { S.query = e.target.value.trim(); renderTable(view()); });
   $('busy-more').addEventListener('click', () => { S.busyAll = !S.busyAll; renderBusy(); });
   document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab, true)));
-  window.addEventListener('hashchange', () => setTab(location.hash === '#engineering' ? 'eng' : 'trade', false));
+  window.addEventListener('hashchange', () => {
+    setTab(location.hash === '#engineering' ? 'eng' : 'trade', false);
+    if (location.hash === '#addon') $('addon').scrollIntoView();          // the addon section lives on the trades tab
+  });
   $('eng-skill').addEventListener('input', (e) => {
     const v = parseInt(e.target.value, 10);
     if (!(v >= 1)) return;

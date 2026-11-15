@@ -108,6 +108,11 @@ b { color: var(--ink); }
 .rescan-btn:hover { box-shadow: inset 0 0 0 1px var(--trim); }
 .rescan-btn:disabled { opacity: .6; cursor: wait; }
 .rescan-status:empty { display: none; }
+.addon-link { color: var(--head); font-weight: 700; text-decoration: underline dotted; text-underline-offset: 3px; }
+#addon .addon-points, #addon .addon-steps { color: var(--ink-2); padding-left: 20px; margin: 8px 0; }
+#addon li { margin: 4px 0; }
+#addon .addon-dl { display: inline-block; text-decoration: none; font-size: 14px; padding: 9px 16px; }
+#addon .muted-note { color: var(--ink-3); font-size: 13px; margin: 6px 0 0; }
 .rescan-setup ol { margin: 6px 0; padding-left: 20px; color: var(--ink-2); }
 .rescan-setup li { margin: 3px 0; }
 .rescan-setup a.copy { display: inline-block; text-decoration: none; }
