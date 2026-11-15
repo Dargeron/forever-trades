@@ -42,6 +42,11 @@ Full background, decisions and history: `docs/HANDOFF.md`.
   `Logic.lua` has no game calls; `ForeverTrades.lua` is the window/events (C_AuctionHouse owned auctions, with the
   legacy API as fallback; Blackwater detected by zone names in en/es/de/fr plus a manual switch remembered per zone;
   listings stored per character and house in `ForeverTradesDB`, older than 48 h ignored). Keep it Lua 5.1.
+  **Live prices** (owner's request): on opening, it reads the house you're at (`C_AuctionHouse.ReplicateItems`, one
+  full read per 15 min, chunked; else `SendSearchQuery` per listed item, throttled) and `L.Relive` re-prices: buy here
+  → cheapest other-seller listing now is the buy price; sell here → min(`top`, cheapest now), `top` = recent price at
+  home (min of median/typical/paid) or half the other faction's on Blackwater (written into the data file). Not
+  listed where you'd buy → "doesn't pay now", sorted last and greyed. UpdateDataEvery15Min.bat/.command loop.
   `tools/addon_test.py <data.lua>` runs it in Lua 5.4 (ctypes, liblua5.4) against a fake game API.
 
 ## Running it

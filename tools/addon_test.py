@@ -34,7 +34,9 @@ function W:GetChecked() return self._checked end
 function W:CreateFontString() return new("FontString") end
 function W:CreateTexture() return new("Texture") end
 KNOWN_EVENTS = { ADDON_LOADED = 1, AUCTION_HOUSE_SHOW = 1, AUCTION_HOUSE_CLOSED = 1, OWNED_AUCTIONS_UPDATED = 1,
-                 AUCTION_HOUSE_AUCTION_CREATED = 1, AUCTION_CANCELED = 1, BAG_UPDATE_DELAYED = 1 }
+                 AUCTION_HOUSE_AUCTION_CREATED = 1, AUCTION_CANCELED = 1, BAG_UPDATE_DELAYED = 1,
+                 REPLICATE_ITEM_LIST_UPDATE = 1, COMMODITY_SEARCH_RESULTS_UPDATED = 1, ITEM_SEARCH_RESULTS_UPDATED = 1,
+                 AUCTION_HOUSE_THROTTLED_SYSTEM_READY = 1 }
 function W:RegisterEvent(e) if not KNOWN_EVENTS[e] then error("unknown event " .. e) end end
 function CreateFrame(kind, name, parent, template)
   local f = new(kind)
@@ -44,7 +46,11 @@ function CreateFrame(kind, name, parent, template)
 end
 UIParent, GameTooltip = new("Frame"), new("GameTooltip")
 ZONE, SUBZONE, OWNED, BAGS, QUERIES, SEARCHED = "Stormwind City", "", {}, {}, 0, nil
-time = os.time                                           -- the game has time(), not os
+time, date = os.time, os.date                            -- the game has time() and date(), not os
+TIMERS = {}
+C_Timer = { After = function(sec, fn) TIMERS[#TIMERS + 1] = fn end }
+function runTimers(max) local n = 0 while #TIMERS > 0 and n < (max or 100000) do table.remove(TIMERS, 1)(); n = n + 1 end return n end
+REPLICATE, REPLICATE_CALLS, SEARCH_RESULTS, SEARCHES = {}, 0, {}, {}
 function UnitName() return "Tester" end
 function GetRealmName() return "Realm" end
 function UnitFactionGroup() return "Alliance", "Alliance" end
@@ -56,7 +62,30 @@ C_AuctionHouse = {
   QueryOwnedAuctions = function(sorts) QUERIES = QUERIES + 1 end,
   GetNumOwnedAuctions = function() return #OWNED end,
   GetOwnedAuctionInfo = function(i) return OWNED[i] end,
+  -- one full read of the house: listings are { id, count, buyout, owner }, read 0-based
+  ReplicateItems = function() REPLICATE_CALLS = REPLICATE_CALLS + 1 end,
+  GetNumReplicateItems = function() return #REPLICATE end,
+  GetReplicateItemInfo = function(i)
+    local r = REPLICATE[i + 1]
+    return "name", 0, r.count, 1, true, 1, 0, 0, 0, r.buyout, 0, false, nil, r.owner, r.owner, 0, r.id, true
+  end,
+  -- one search per item (when a full read isn't allowed): results are given by the test
+  IsThrottledMessageSystemReady = function() return true end,
+  MakeItemKey = function(id) return { itemID = id } end,
+  SendSearchQuery = function(key, sorts, separate) SEARCHES[#SEARCHES + 1] = key.itemID end,
+  GetNumCommoditySearchResults = function(id) return #(SEARCH_RESULTS[id] or {}) end,
+  GetCommoditySearchResultInfo = function(id, i) return (SEARCH_RESULTS[id] or {})[i] end,
 }
+-- answer the addon's searches one at a time, as the game does
+function pumpSearches()
+  local n = 0
+  while #SEARCHES > 0 do
+    local id = table.remove(SEARCHES, 1)
+    fire("COMMODITY_SEARCH_RESULTS_UPDATED", id)
+    n = n + 1
+  end
+  return n
+end
 C_Item = { GetItemInfo = function(id) return nil end, GetItemCount = function(id) return BAGS[id] or 0 end }
 AuctionHouseFrame = new("Frame")
 AuctionHouseFrame.SearchBar = { SearchBox = new("EditBox"), StartSearch = function(self) SEARCHED = self.SearchBox._text end }
@@ -135,8 +164,63 @@ say("hide line:", ForeverTradesFrame.hideText._text)
 say("rows shown:", #rows(), "of", #D.alliance.toHome + #D.alliance.toNeutral)
 say("age line:", ForeverTradesFrame.age._text)
 
--- 3. The house switch, and money formatting
-ForeverTradesFrame.isNeutral._scripts.OnClick()
+-- 3. Live prices at Blackwater: a full read of the house. One trade is cheaper here now, one isn't listed,
+--    and on the "sell here" list someone undercuts the website's price; my own cheap listing doesn't count.
+fire("AUCTION_HOUSE_CLOSED")
+local cheap, missing, comp, mineL = D.alliance.toHome[3], D.alliance.toHome[4], D.alliance.toNeutral[2], D.alliance.toHome[5]
+REPLICATE = { { id = cheap.id, count = 2, buyout = math.floor(cheap.buy / 2) * 2, owner = "Someone" },
+              { id = cheap.id, count = 1, buyout = cheap.buy * 3, owner = "Someone" },
+              { id = comp.id, count = 1, buyout = math.floor((comp.top or comp.sell) * 0.7), owner = "Other" },
+              { id = mineL.id, count = 1, buyout = 1, owner = "Tester" } }
+for k = 1, 12000 do REPLICATE[#REPLICATE + 1] = { id = 1, count = 1, buyout = 100, owner = "x" } end   -- other items
+ZONE = "Tanaris"; SUBZONE = "Gadgetzan"; OWNED = {}
+ForeverTradesDB.lastReplicate = nil
+fire("AUCTION_HOUSE_SHOW"); fire("OWNED_AUCTIONS_UPDATED")
+runTimers(1)                                                  -- the scan starts shortly after opening
+assert(REPLICATE_CALLS == 1, "asked for a full read of the house")
+fire("REPLICATE_ITEM_LIST_UPDATE"); runTimers()
+say("live line:", ForeverTradesFrame.liveText._text)
+assert(ForeverTradesFrame.liveText._text:find("Live prices from here", 1, true), "full read finished")
+local byId = {}
+for _, r in ipairs(rows()) do byId[r.o.id] = r end
+local c = byId[cheap.id]
+assert(c and c.live._text:find("Here now", 1, true) and math.abs(c.o.buy - math.floor(cheap.buy / 2)) < 1, "cheaper here now: buy price re-priced")
+assert(math.abs(c.o.each - (cheap.back - c.o.buy)) < 1, "profit re-worked from the live price")
+say("cheaper now:", cheap.name, "/", c.live._text, "/", c.l2._text)
+local m = byId[missing.id]
+assert(m and m.live._text:find("None listed here right now", 1, true) and m.o.pays == false, "not listed here: doesn't pay now")
+local last = rows()[#rows()]
+say("not listed:", missing.name, "/", m.live._text)
+local cp = byId[comp.id]
+if cp then
+  assert(cp.o.sell < (comp.top or comp.sell) and cp.live._text:find("Cheapest here now", 1, true), "sell-here: undercut by a live listing")
+  say("undercut:", comp.name, "/", cp.live._text, "/", cp.l1._text)
+end
+local ml = byId[mineL.id]
+assert(not ml or not (ml.o.buy == 1), "my own listing is not the price here")
+-- the trades that no longer pay are listed after the ones that do, in each list
+local h1 = heads()[1]
+say("first list heading:", h1)
+
+-- 4. Live prices at Stormwind, item by item (a full read was used less than 15 minutes ago)
+fire("AUCTION_HOUSE_CLOSED")
+local s1 = D.alliance.toNeutral[3]
+SEARCH_RESULTS = { [s1.id] = { { unitPrice = math.floor(s1.buy * 0.8), quantity = 5, numOwnerItems = 0 } } }
+ZONE = "Stormwind City"; SUBZONE = ""; TIMERS = {}
+fire("AUCTION_HOUSE_SHOW"); fire("OWNED_AUCTIONS_UPDATED")
+runTimers(1)
+assert(REPLICATE_CALLS == 1, "no second full read within 15 minutes")
+local answered = pumpSearches()
+TIMERS = {}
+say("searched", answered, "items one by one;", ForeverTradesFrame.liveText._text)
+assert(answered >= 100, "every listed item was searched")
+byId = {}
+for _, r in ipairs(rows()) do byId[r.o.id] = r end
+assert(byId[s1.id] and byId[s1.id].live._text:find("Here now", 1, true), "searched item re-priced")
+say("searched item:", s1.name, "/", byId[s1.id].live._text, "/", byId[s1.id].l1._text)
+
+-- 5. The house switch, and money formatting
+ForeverTradesFrame.isNeutral._scripts.OnClick(); runTimers(); pumpSearches(); TIMERS = {}
 assert(heads()[1]:find("Buy here now, sell in the Alliance house", 1, true), "switch to Blackwater")
 local M = ForeverTradesLogic.Money
 assert(M(5) == "5|cffeda55fc|r" and M(12345):find("1|cffffd100g|r 23", 1, true) and M(1500000) == "150|cffffd100g|r", "money")

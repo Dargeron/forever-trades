@@ -777,12 +777,16 @@ def addon_data(result):
            f'  version = 1, generated = {epoch(result["generated"])}, site = "https://dargeron.github.io/forever-trades/",',
            '  snapshot = { ' + ', '.join(f'{k} = {epoch(v["snapshot"])}' for k, v in result['houses'].items()) + ' },']
     keys = (('id', 'id'), ('q', 'q'), ('buy', 'buy'), ('sell', 'sell'), ('back', 'back'), ('mult', 'mult'), ('soldDay', 'sold'),
-            ('unitsDay', 'units'), ('profitEach', 'each'), ('expected', 'exp'), ('profitDay', 'day'), ('dep', 'dep'))
+            ('unitsDay', 'units'), ('profitEach', 'each'), ('expected', 'exp'), ('profitDay', 'day'), ('dep', 'dep'), ('top', 'top'))
     for fac, f in result['factions'].items():
         out.append(f'  {fac} = {{')
         for src, dst in (('buyNeutralSellHome', 'toHome'), ('buyHomeSellNeutral', 'toNeutral')):
             out.append(f'    {dst} = {{')
             for o in f[src]['items']:
+                # price ceiling on the selling side, before today's competition there (the addon re-prices
+                # with live listings): the recent price at home, or half the other faction's on Blackwater
+                rec = [x for x in (o.get('dstMed'), o.get('dstTyp'), o.get('dstPaid')) if x]
+                o = dict(o, top=o.get('half') if dst == 'toNeutral' else (min(rec) if rec else o.get('sell')))
                 fields = ', '.join(f'{b} = {lua_num(o.get(a))}' for a, b in keys if o.get(a) is not None)
                 out.append(f'      {{ name = {lua_str(o["name"])}, {fields} }},')
             out.append('    },')
@@ -805,7 +809,7 @@ def write_addon(result, out_dir):
             if name == 'ForeverTrades_Data.lua':
                 continue
             info = zipfile.ZipInfo('ForeverTrades/' + name, date_time=(2026, 1, 1, 0, 0, 0))
-            info.external_attr = (0o755 if name.endswith('.command') else 0o644) << 16
+            info.external_attr = (0o755 if name.endswith('.command') else 0o644) << 16    # Mac scripts stay runnable
             info.compress_type = zipfile.ZIP_DEFLATED
             with open(os.path.join(ADDON_DIR, name), 'rb') as src:
                 z.writestr(info, src.read())

@@ -115,3 +115,53 @@ function L.Lines(o)
   if o.units and o.units >= 1 then third = third .. " · buy up to " .. math.floor(o.units) .. " a day" end
   return first, second, third
 end
+
+-- Re-price one trade with what the auction house you're standing at lists right now (fresher than the website).
+-- live: { low = cheapest unit price here now (not yours), qty = units listed } ; false = checked, none listed ;
+-- nil = not checked yet (the website's figures stand).
+--   buy here:  the cheapest listing here is your buy price; what you get back in the other house stays.
+--   sell here: the cheapest listing here is your competition: you sell at the lower of it and the price
+--              ceiling from the website (`top`: the recent typical price at home, or half the other faction's
+--              price on Blackwater).
+function L.Relive(o, buyHere, house, live)
+  if live == nil then return o end
+  local r = {}
+  for k, v in pairs(o) do r[k] = v end
+  if buyHere then
+    if live then
+      r.buy = live.low
+      r.each = o.back - live.low
+      r.mult = o.back / live.low
+      r.live = "Here now: " .. L.Money(live.low) .. " each, " .. live.qty .. " listed"
+    else
+      r.gone, r.live = true, "None listed here right now"
+    end
+  else
+    local cut = (house == "neutral") and 0.15 or 0.05
+    local top = o.top or o.sell
+    local sell = live and math.min(top, live.low) or top
+    r.sell = sell
+    r.back = sell * (1 - cut)
+    r.each = r.back - o.buy
+    r.mult = r.back / o.buy
+    r.live = live and ("Cheapest here now: " .. L.Money(live.low) .. ", " .. live.qty .. " listed") or "None listed here now: no competition"
+  end
+  if r.each then
+    r.exp = r.each - (o.dep or 0)
+    r.day = o.units and (o.units * r.each) or nil
+  end
+  r.pays = (not r.gone) and (r.mult or 0) >= 1.15
+  return r
+end
+
+-- Trades that still pay first, by profit a day, then profit per item (the site's order).
+function L.SortLive(list)
+  table.sort(list, function(a, b)
+    local pa, pb = a.pays ~= false, b.pays ~= false
+    if pa ~= pb then return pa end
+    local da, dbb = a.day or -1e15, b.day or -1e15
+    if da ~= dbb then return da > dbb end
+    return (a.each or 0) > (b.each or 0)
+  end)
+  return list
+end
