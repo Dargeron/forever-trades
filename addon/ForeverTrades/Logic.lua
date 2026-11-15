@@ -105,7 +105,8 @@ end
 
 -- One recommendation as three short lines: prices, profit per item, and how much sells.
 function L.Lines(o)
-  local first = "Buy up to " .. L.Money(o.buy) .. ", sell at " .. L.Money(o.sell) .. "   x" .. string.format("%.2f", o.mult or 0)
+  local first = "Buy from " .. L.Money(o.buy) .. (o.pay and (" (pay up to " .. L.Money(o.pay) .. ")") or "") ..
+                ", sell at " .. L.Money(o.sell) .. "   x" .. string.format("%.2f", o.mult or 0)
   local second = "+" .. L.Money(o.each) .. " each"
   if o.exp and o.exp ~= o.each then
     second = second .. ", " .. (o.exp < 0 and "" or "+") .. L.Money(o.exp) .. " after the deposit"

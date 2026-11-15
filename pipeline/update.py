@@ -463,24 +463,32 @@ def trend_of(d, typ):
 
 
 def plan(s, back, spd, warming):
-    """How many to buy a day, and at what average price, given what one unit brings back
-    (`back`) and how many sell a day where the buyers are (`spd`). None unless it clears
-    x1.15 and (once out of warming) 3s a day. While warming, items with no sales seen yet
-    stay listed as price gaps. Returns (units, avg, mult, profit_each, profit_day, ladder)."""
+    """Rate a trade at the cheapest listing (owner's rule, 15 Nov: "see the benefit of the item at the lowest price,
+    otherwise you lose a big opportunity"): buy price, return and profit per item all use it. `back` is what one unit
+    brings back after the cut; `spd` how many sell a day where the buyers are. Profit a day walks up the price
+    ladder, each unit at its own price, only as far as each still pays x1.15 and at most your share (a quarter of
+    what sells a day), so a deep, busy market can only add to it: before, a quarter of the Horde's Murloc Eye sales
+    (1,628) averaged 1s28c in Alliance = x1.12 and the item vanished, though its cheapest 877 paid x1.15 or more.
+    None unless the cheapest listing clears x1.15 and (out of warming) the day's profit is 3s or more. While warming,
+    items with no sales seen yet stay listed as price gaps. Returns (units, buy, mult, profit_each, profit_day, ladder),
+    units = how many of the paying listings fit your share (or None while there are no sales figures)."""
+    low = s['low']
+    mult = back / low
+    if mult < 1.15:
+        return None
+    profit_each = back - low
     if spd is None or (warming and spd < 0.5):
-        units, avg = None, s['low']
+        units, profit_day = None, None
     else:
         if spd < 0.5:
             return None
-        units = min(0.25 * spd, s['qty'])
-        avg, _ = walk(s['ladder'], max(1, math.ceil(units)))
-        if not avg:
-            return None
-    mult = back / avg
-    if mult < 1.15:
-        return None
-    profit_each = back - avg
-    profit_day = units * profit_each if units is not None else None
+        units = min(0.25 * spd, s['qty'], sum(q for p, q in s['ladder'] if back / p >= 1.15))
+        left, profit_day = units, 0.0
+        for p, q in s['ladder']:
+            if left <= 0 or back / p < 1.15:
+                break
+            take = min(q, left)
+            profit_day += take * (back - p); left -= take
     if not warming and profit_day is not None and profit_day < 300:
         return None
     need = math.ceil(units * 2) if units else 5
@@ -489,7 +497,7 @@ def plan(s, back, spd, warming):
         ladder.append([p, q]); acc += q
         if acc >= need or len(ladder) >= 12:
             break
-    return units, avg, mult, profit_each, profit_day, ladder
+    return units, low, mult, profit_each, profit_day, ladder
 
 
 def finish(out, warming):
@@ -589,7 +597,7 @@ def opportunities(src, dst, src_house, dst_house, dst_cut, hist, now_dt, names_c
             profitDay=int(round(profit_day)) if profit_day is not None else None,
             marketDay=int(round(spd * (sell - dep))) if spd else None, marketGross=int(round(spd * sell)) if spd else None,
             mktDep=dep, daysStock=round(dst_qty / spd, 1) if spd else None,
-            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(d, typ), ladder=ladder))
+            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(d, typ), ladder=ladder, payUpTo=int(back / 1.15)))
     return finish(out, warming), warming, dst_hours
 
 
@@ -648,7 +656,7 @@ def to_blackwater(home, neu, other, home_key, other_key, cut, share, hist, now_d
             profitDay=int(round(profit_day)) if profit_day is not None else None,
             marketDay=int(round(spd * (ref - fdep))) if spd else None, marketGross=int(round(spd * ref)) if spd else None,
             mktDep=fdep, daysStock=round(o_qty / spd, 1) if spd else None,
-            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(o, typ), ladder=ladder))
+            tag='Solid' if mult >= 2 else 'Fair', trend=trend_of(o, typ), ladder=ladder, payUpTo=int(back / 1.15)))
     return finish(out, warming), warming, hours
 
 
@@ -777,7 +785,8 @@ def addon_data(result):
            f'  version = 1, generated = {epoch(result["generated"])}, site = "https://dargeron.github.io/forever-trades/",',
            '  snapshot = { ' + ', '.join(f'{k} = {epoch(v["snapshot"])}' for k, v in result['houses'].items()) + ' },']
     keys = (('id', 'id'), ('q', 'q'), ('buy', 'buy'), ('sell', 'sell'), ('back', 'back'), ('mult', 'mult'), ('soldDay', 'sold'),
-            ('unitsDay', 'units'), ('profitEach', 'each'), ('expected', 'exp'), ('profitDay', 'day'), ('dep', 'dep'), ('top', 'top'))
+            ('unitsDay', 'units'), ('profitEach', 'each'), ('expected', 'exp'), ('profitDay', 'day'), ('dep', 'dep'), ('top', 'top'),
+            ('payUpTo', 'pay'))
     for fac, f in result['factions'].items():
         out.append(f'  {fac} = {{')
         for src, dst in (('buyNeutralSellHome', 'toHome'), ('buyHomeSellNeutral', 'toNeutral')):

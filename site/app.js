@@ -441,9 +441,12 @@
     const home = FAC[S.faction], other = OTHER[S.faction];
     const box = el('div', 'details');
     const dl = el('dl');
-    const buyNode = join(coins(o.buy), o.low !== o.buy ? join(' avg, from ', coins(o.low)) : '');
+    const buyNode = join(coins(o.buy), ' (cheapest now)');
     const sh = Math.round(100 * (view().share || 0.5));
-    const spend = o.unitsDay ? coins(Math.max(1, Math.floor(o.unitsDay)) * o.buy) : '–';
+    // what buying your share costs, each unit at its own listed price
+    let left = o.unitsDay ? Math.max(1, Math.floor(o.unitsDay)) : 0, cost = 0;
+    for (const [p, q] of (o.ladder || [])) { if (left <= 0) break; const t = Math.min(q, left); cost += t * p; left -= t; }
+    const spend = o.unitsDay ? coins(cost) : '–';
     const rows = toBW() ? [
       ['Buy at (' + home + ')', buyNode],
       ['Listed in ' + home, num(o.srcQty, 0)],
@@ -485,8 +488,9 @@
     box.append(dl);
     const n = o.unitsDay ? Math.max(1, Math.floor(o.unitsDay)) : 1;
     const how = el('p', 'how');
-    how.append('Today: buy up to ' + n + (toBW() ? ' in the ' + home + ' house' : ' on Blackwater') + ' at ', coins(o.buy),
-      ' or less, and list ' + (toBW() ? 'on Blackwater' : 'in the ' + home + ' house') + ' at about ', coins(o.sell), '.');
+    how.append('Today: buy up to ' + n + (toBW() ? ' in the ' + home + ' house' : ' on Blackwater') + ', from ', coins(o.buy),
+      (o.payUpTo ? join(' and paying no more than ', coins(o.payUpTo), ' each') : ''),
+      ', and list ' + (toBW() ? 'on Blackwater' : 'in the ' + home + ' house') + ' at about ', coins(o.sell), '.');
     box.append(how, historySection(o.id));
     return box;
   }

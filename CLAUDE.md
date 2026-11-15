@@ -90,6 +90,10 @@ python3 -m http.server -d site 8000
   button for the key dialog. After a dispatch the page polls latest.json for 6 min and reloads when it changes.
 - Thresholds: show if return ≥ ×1.15 and (after warming) profit ≥ 3s a day; "your share" = 25% of estimated daily
   sales where the buyers are; Solid ≥ ×2. Never cut a list to a top N (the owner missed items that way).
+- **Rated at the cheapest listing** (`plan`, owner's rule 15 Nov): buy, ×, profit each and expected use the cheapest
+  listing now, never an average for a suggested amount (averaging 1,628 Murloc Eyes up the ladder gave ×1.12 and hid a
+  ×1.6 trade). Profit a day walks the ladder, each unit at its own price, only while it still pays ×1.15, at most your
+  share; `payUpTo` = back / 1.15 (site: "paying no more than"; addon: "pay up to").
 - **Home → Blackwater** (`to_blackwater`): sell = min(½ × other faction's cautious price, cheapest Blackwater listing);
   volume and "your share" come from the other faction's sales. Blackwater asks above that are ignored. Owner's rule:
   quantity caps come from Alliance/Horde sales, never Blackwater's. The ½ is `other_faction_share` in config.json.
