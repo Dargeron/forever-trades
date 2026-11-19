@@ -1,14 +1,17 @@
 name: Update prices
 
+# Every hour (at :15, just before Blizzard's hourly snapshot) this reads the auction houses and saves the
+# history on the `state` branch, so sales are counted from hourly snapshots. The website itself is only
+# published twice a day: at 03:15 and 14:15 Paris time (by the first run after each of those times that finds
+# the site not yet published since then), on a push, or when the workflow is started by hand with "force".
+# A Claude scheduled task starts the hourly runs, because GitHub has not fired this repo's schedule reliably.
 on:
   schedule:
-    - cron: '9,29,49 * * * *'     # three checks an hour. Blizzard's hourly snapshot is stamped about :25 but can be
-                                  # published 15-20+ minutes later; a check that finds nothing new stops in seconds,
-                                  # so the site is never more than ~20 minutes behind a new snapshot.
+    - cron: '15 * * * *'
   workflow_dispatch:
     inputs:
       force:
-        description: Rebuild the site even if Blizzard has no new snapshot
+        description: Publish the site now (otherwise it is only published at 03:15 and 14:15 Paris time)
         type: boolean
         default: true
   push:
@@ -19,6 +22,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  deployments: read
 
 concurrency:
   group: update-prices
@@ -30,8 +34,32 @@ jobs:
     timeout-minutes: 20
     outputs:
       changed: ${{ steps.run.outputs.changed }}
+      publish: ${{ steps.gate.outputs.publish }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Publish the site this run?
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE_INPUT: ${{ inputs.force == true }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # the last set time that has passed: 03:15 or 14:15 Paris time
+          NOW=$(date +%s)
+          T03=$(TZ=Europe/Paris date -d "03:15" +%s); T14=$(TZ=Europe/Paris date -d "14:15" +%s)
+          if [ "$NOW" -ge "$T14" ]; then SLOT=$T14; elif [ "$NOW" -ge "$T03" ]; then SLOT=$T03
+          else SLOT=$(TZ=Europe/Paris date -d "yesterday 14:15" +%s); fi
+          # when the site was last published (its newest GitHub Pages deployment)
+          LAST=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" --jq '.[0].created_at // empty' 2>/dev/null || true)
+          if [ -n "$LAST" ]; then
+            DUE=$([ "$(date -d "$LAST" +%s)" -lt "$SLOT" ] && echo true || echo false)
+          else                                   # can't tell: publish in the hour of a set time
+            case "$(TZ=Europe/Paris date +%H)" in 03|14) DUE=true ;; *) DUE=false ;; esac
+          fi
+          if [ "$EVENT" = "push" ] || [ "$FORCE_INPUT" = "true" ] || [ "$DUE" = "true" ]; then P=true; else P=false; fi
+          echo "publish=$P" >> "$GITHUB_OUTPUT"
+          echo "Paris time $(TZ=Europe/Paris date +%H:%M); last set time $(TZ=Europe/Paris date -d "@$SLOT" +'%d %b %H:%M'); last published ${LAST:-unknown}; event $EVENT, force $FORCE_INPUT: publish=$P"
 
       - name: Restore saved history
         run: |
@@ -48,7 +76,7 @@ jobs:
         env:
           BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
-          FORCE: ${{ github.event_name == 'push' || inputs.force == true }}
+          FORCE: ${{ steps.gate.outputs.publish }}
         run: |
           if [ "$FORCE" = "true" ]; then F=--force; else F=; fi
           python3 pipeline/update.py run --state state --out site/data $F
@@ -70,7 +98,7 @@ jobs:
       - name: Stamp the site version
         # The page, script and data of one deploy share a version; a browser holding an older
         # cached page reloads itself when the data says a newer one is live (see app.js load()).
-        if: steps.run.outputs.changed == 'true'
+        if: steps.run.outputs.changed == 'true' && steps.gate.outputs.publish == 'true'
         run: |
           V="${GITHUB_SHA::12}"
           sed -i "s/?v=dev/?v=$V/g" site/index.html
@@ -79,14 +107,14 @@ jobs:
           grep -q "\"siteVersion\":\"$V\"" site/data/latest.json
 
       - name: Package the site
-        if: steps.run.outputs.changed == 'true'
+        if: steps.run.outputs.changed == 'true' && steps.gate.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
   deploy:
     needs: build
-    if: needs.build.outputs.changed == 'true'
+    if: needs.build.outputs.changed == 'true' && needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
