@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forever Trades</title>
-<meta name="description" content="What to buy on the WoW: Forever neutral auction house and sell at home (and the reverse), EU PvP, updated hourly from Blizzard's API.">
+<meta name="description" content="What to buy on the WoW: Forever neutral auction house and sell at home (and the reverse), EU PvP, from Blizzard's API.">
 <meta name="theme-color" content="#120d08">
 <script>try { if (localStorage.getItem('ft-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) { /* ignore */ }</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.35' cy='.3' r='.8'%3E%3Cstop offset='0' stop-color='%23fff2b0'/%3E%3Cstop offset='.55' stop-color='%23e3a92f'/%3E%3Cstop offset='1' stop-color='%23845212'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='14' fill='url(%23g)' stroke='%235a3608' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%23845212' stroke-width='1' opacity='.6'/%3E%3C/svg%3E">
@@ -19,9 +19,8 @@
     <button type="button" class="theme-btn" id="theme" aria-label="Switch to the parchment (light) theme"><span aria-hidden="true">☀</span><span class="t-label"> Parchment</span></button>
     <p class="kicker">WoW: Forever · EU PvP</p>
     <h1>Forever Trades</h1>
-    <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater. Prices come from Blizzard every hour.</p>
+    <p class="lede">What to buy on the <b>Blackwater</b> (neutral) auction house and sell at home, and what to take from home to Blackwater.</p>
     <p class="fresh" id="fresh" aria-live="polite">Loading prices…</p>
-    <p class="rescan-row"><button type="button" class="rescan-btn" id="rescan" title="Ask Blizzard for its newest prices and rebuild the site"><span aria-hidden="true">↻</span> Rescan now</button><a class="addon-link" href="#addon">In-game addon</a><span class="rescan-status" id="rescan-status" aria-live="polite"></span></p>
   </header>
 
   <div class="tabs" role="tablist" aria-label="Pages">
@@ -161,69 +160,15 @@
               <th class="num hide-l" scope="col" data-sort="soldDay">Sold a day</th>
               <th class="num hide-l" scope="col" data-sort="avg" title="Average price buyers paid on Blackwater">Price paid</th>
               <th class="c-bar" scope="col" data-sort="marketDay">Gold a day</th>
-              <th class="hide-t" scope="col" data-sort="resellX" title="Faction house where it resells at a profit, and what each 1g spent on Blackwater today (cheapest listing) brings back there after the 5% cut">Resell in</th>
+              <th class="num hide-t" scope="col" data-sort="resellX" id="busy-th-x" title="What each 1g spent on Blackwater today (cheapest listing) brings back in your faction's house after its 5% cut">Back per 1g</th>
               <th class="num hide-s" scope="col" data-sort="low" title="Cheapest listing on Blackwater now (empty if none is listed)">Blackwater</th>
-              <th class="num hide-s" scope="col" data-sort="aLow" title="Cheapest listing in the Alliance house now">Alliance</th>
-              <th class="num hide-s" scope="col" data-sort="hLow" title="Cheapest listing in the Horde house now">Horde</th>
+              <th class="num hide-s" scope="col" data-sort="homeLow" id="busy-th-home" title="Cheapest listing in your faction's house now">Home</th>
             </tr>
           </thead>
           <tbody id="busy-body"></tbody>
         </table>
       </div>
       <button type="button" class="more" id="busy-more" hidden></button>
-    </section>
-
-    <section class="card" id="addon">
-      <h2>In-game addon</h2>
-      <p class="sub">Forever Trades in the game: open an auction house and a window beside it lists this site's trades from where you stand, leaving out everything you already have listed.</p>
-      <ul class="addon-points">
-        <li><b>At Blackwater</b> (Booty Bay, Gadgetzan, Everlook): what to buy here now and sell at home, and what to bring from home to sell here.</li>
-        <li><b>At your faction's house</b>: what to buy here now and sell on Blackwater, and what to bring from Blackwater to sell here.</li>
-        <li>It reads <b>your own listings</b> when the auction house opens and remembers them for each house, so whatever you're already selling is left out (a box shows them again). Items in your bags are marked. Click an item to search for it.</li>
-        <li><b>Live prices</b>: it also checks what each item costs at the auction house you're at, right now, and re-prices the trades with it: fresher than this site for that house. Trades that no longer pay at today's prices drop to the bottom, greyed out. The other house's prices and the sales figures come from this site.</li>
-      </ul>
-      <p><a class="copy addon-dl" href="data/ForeverTrades.zip" download>Download the addon (.zip)</a></p>
-      <ol class="addon-steps">
-        <li>Unzip it into your WoW: Forever folder, under <b>Interface → AddOns</b>, so you get a folder called <b>ForeverTrades</b> there.</li>
-        <li>In the game's AddOns list, if it says “out of date”, tick <b>Load out of date AddOns</b>.</li>
-        <li>For this site's newest prices, double-click <b>UpdateData</b> in that folder (UpdateData.bat on Windows, UpdateData.command on a Mac), or leave <b>UpdateDataEvery15Min</b> running while you play; then type <b>/reload</b> in the game. The game reads the addon's files when you log in or reload, which is how the prices get from this site into the addon. The window says how old they are.</li>
-        <li><b>/ft</b> opens or closes the window anywhere; <b>/ft blackwater</b> shows the Blackwater lists.</li>
-      </ol>
-      <p class="muted-note">The game doesn't let addons go online, so the prices come from this site's hourly file, not from inside the game. The download always includes the newest prices.</p>
-    </section>
-
-    <section class="card help">
-      <h2>How to read this</h2>
-      <details open>
-        <summary>The numbers</summary>
-        <ul>
-          <li><b>Buy</b>: the cheapest listing right now. Back per 1g, profit per item and expected profit are all worked out at that price, so a cheap batch is never hidden by dearer listings above it. <b>Profit a day</b> counts each unit you'd buy at its own listed price, going up the listings only as far as each one still returns ×1.15, and at most your share.</li>
-          <li><b>Sell</b>, selling at home: the cheapest current listing in your faction's house, or its 7-day typical price if that's lower.</li>
-          <li><b>Sell</b>, selling on Blackwater: <b>half the other faction's price</b>. Almost nobody buys on Blackwater to use the item; your buyers are traders from the other faction who resell it in their own house, and they need a profit too. If someone already sells the item on Blackwater for less than that, you can only match the cheapest Blackwater listing. Blackwater's own asking prices are otherwise ignored, because they are often far too high.</li>
-          <li><b>Back per 1g</b>: what you get back for each gold you spend, after the cut (<b>5%</b> on your faction's house, <b>15%</b> on Blackwater). ×2 means you double your gold. <b>Solid</b> is ×2 or more; <b>Fair</b> is ×1.15 to ×2.</li>
-          <li><b>Sold a day</b>: how many units we saw sell where your buyers are, averaged over up to 7 days, always in a faction auction house, never on Blackwater: your own faction's house when you sell at home, the other faction's house when you sell on Blackwater (your Blackwater buyers resell there). The column heading names the house, e.g. “Sold a day (Horde AH)”.</li>
-          <li><b>Market a day</b>: sold a day × (the price − the deposit to list one), so how much gold changes hands for that item each day after deposits.</li>
-          <li><b>Expected profit (each, after deposit)</b>: the profit per item minus the auction deposit, counted as if you never got it back. You pay a deposit to list anything; it comes back when the item sells, and is lost if it expires or you cancel. It is a share of the item's vendor sell price for a 24-hour listing: 60% in your faction's house, 300% on Blackwater, and at least 1 silver per listing (shared by a stack of 20 for trade goods). Gear and recipes with a high vendor price can cost more to list than they earn: those show a loss here.</li>
-          <li><b>Your share</b>: we suggest moving at most a quarter of what sells each day, so you don't flood the market. <b>Profit a day</b> is your share × the profit on each item.</li>
-          <li><b>Busiest on Blackwater</b>: items people buy on the neutral house that can be resold at a profit in the Alliance or Horde house, by gold changing hands each day. <b>Resell in</b> shows where, and what each 1g spent on Blackwater today (its cheapest listing; what buyers paid if none is listed) brings back there after the 5% cut. Items that cost more on Blackwater than either house pays are left out: those are mostly players moving goods between their own characters.</li>
-          <li><b>Spike protection</b>: a selling price is never taken above the item's 3-day median price, its 7-day typical price or what buyers actually paid, so a few silly listings left after the cheap ones sold can't make a trade look good. What buyers paid is itself worked out from listings that disappeared, so it never sets a price on its own: an item with nothing listed now and no median or typical price yet is left out. White weapons and armour that NPC vendors sell are never priced above the vendor price.</li>
-          <li><b>Price history</b>: open any item to see a graph of its cheapest price in each house, hour by hour, with the 3-day median, the cheapest of the last 7 days and since tracking began. The history starts on 13 Nov 2026 and grows with every snapshot.</li>
-          <li><b>Details</b>: tap any item, in any table, the chart or the summary, to see everything about it: prices in each house, what buyers actually paid, how many sell a day, your share and the profit.</li>
-          <li><b>Sorting</b>: tap a column heading to sort by it; tap it again to flip the order. The arrow shows which column and which way.</li>
-          <li><b>Chart, across</b>: by default the chart spreads items by <b>market a day</b>, the gold that changes hands for them each day, so a cheap item that sells often can sit to the right of a dear one that rarely sells. Choose <b>Sale price</b> to spread them by what one sells for instead.</li>
-          <li><b>Dot size</b>: what one item sells for. The size steps up evenly with each tenfold rise in price (1s, 10s, 1g, 10g…), so cheap items stay visible next to very dear ones; the key under the chart shows sample sizes.</li>
-          <li><b>Chart search</b>: type part of a name above the chart (for example “recipe”) to show and label only the items that contain it. The chart keeps its scale, so every dot stays exactly where it was; the others just disappear.</li>
-        </ul>
-      </details>
-      <details>
-        <summary>Where the data comes from</summary>
-        <p>Every hour a free GitHub job reads the EU PvP Alliance, Horde and Blackwater auction houses from Blizzard's official Battle.net API. The API only shows what's listed, not what sold. We work out sales by comparing each snapshot with the one an hour earlier. A listing that disappears with 2+ hours left counts as sold, unless it looks like a cancel-and-relist or a cheaper listing of the same item is still there. Some cancellations will still slip through, so treat "sold a day" as an estimate. The first figures appear after one hourly comparison and settle over a day or two.</p>
-        <p>Auction deposits are counted in the expected-profit column and in market a day (as if you lost each deposit), not in profit a day or the shopping list. Travel and mail time aren't counted. Purchases on Blackwater arrive by mail.</p>
-      </details>
-      <details>
-        <summary>Safety</summary>
-        <p>Trade goods, not gold. Blizzard's rules forbid moving gold between factions, so buy and sell items on the auction houses, and click every purchase yourself.</p>
-      </details>
     </section>
   </main>
 
@@ -294,7 +239,7 @@
         <summary>Selling</summary>
         <ul>
           <li><b>Sells for</b> is the item's cautious price in your faction's house: the cheapest listing now, or its 3-day median, 7-day typical price or what buyers paid if any of those is lower. <b>Profit per craft</b> is everything one craft makes (some recipes make 2 to 200) times that price, minus the 5% auction cut, minus the materials. Auction deposits aren't counted.</li>
-          <li><b>Sold a day</b> is worked out from the hourly snapshots, like everywhere on this site, and is an estimate. <b>Profit a day</b> assumes you sell a quarter of that.</li>
+          <li><b>Sold a day</b> is an estimate. <b>Profit a day</b> assumes you sell a quarter of that.</li>
           <li>A recipe with a big profit per craft but almost no sales may take a long time to sell. Recipes that lose money are listed too, at the bottom, and items that bind when picked up are left out (they can't be sold).</li>
           <li><b>Recipes are WoW: Forever's own</b>, read from Blizzard's game data: Forever changed several Classic recipes (the Mechanical Dragonling takes 4 Iron Struts, 4 Gyrochronatoms, 2 Citrines and Fused Wiring; rockets make 5) and added many (SAF-T and EZ-Thro devices, satchels of bombs, camping kits…).</li>
           <li><b>Skill</b> is the Engineering skill a recipe needs. Blizzard's data doesn't include it, so it comes from the Classic recipe list and, for some Forever recipes, from a Forever recipe guide. Recipes whose skill we don't know are hidden unless you tick “Forever recipes with unknown skill”. Schematics have to be found or bought first; Gnomish and Goblin recipes need that specialisation.</li>
@@ -304,7 +249,7 @@
   </main>
 
   <footer>
-    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names and recipes from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. A fan-made tool, not affiliated with or endorsed by Blizzard Entertainment.</p>
+    <p>Prices from Blizzard's Battle.net API (EU, WoW: Forever, PvP ruleset). Item names and recipes from <a href="https://github.com/Nakroma/wow-classic-items">wow-classic-items</a> (MIT) and Blizzard. A fan-made tool, not affiliated with or endorsed by Blizzard Entertainment. Trade goods, not gold: Blizzard's rules forbid moving gold between factions.</p>
   </footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>

@@ -11,8 +11,8 @@
     "faction": 0.05,
     "neutral": 0.15
   },
-  "other_faction_share": 0.5,
-  "_other_faction_share": "Selling on Blackwater: list at this share of the other faction's price, so their traders can still resell at a profit (or match a cheaper Blackwater listing).",
+  "other_faction_share": 0.8,
+  "_other_faction_share": "Selling on Blackwater: list at this share of the other faction's price (80%), so their traders can still resell at a profit (or match a cheaper Blackwater listing).",
   "deposit": {
     "faction": 0.6,
     "neutral": 3.0,
