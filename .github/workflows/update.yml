@@ -7,7 +7,7 @@ name: Update prices
 # A Claude scheduled task starts the hourly runs, because GitHub has not fired this repo's schedule reliably.
 on:
   schedule:
-    - cron: '15 * * * *'
+    - cron: '15,45 * * * *'
   workflow_dispatch:
     inputs:
       force:
